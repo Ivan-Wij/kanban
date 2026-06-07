@@ -20,18 +20,100 @@ func NewPostgres(db *sqlx.DB) *Postgres {
 	return &Postgres{db: db}
 }
 
-const (
-	defaultBoardID   = "00000000-0000-0000-0000-000000000001"
-	todoColumnID     = "00000000-0000-0000-0000-000000000011"
-	doneColumnID     = "00000000-0000-0000-0000-000000000013"
-	archivedPageSize = 20
-)
+const archivedPageSize = 20
 
-func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context) (domain.Board, error) {
+var defaultColumnNames = []string{"To Do", "In Progress", "Done"}
+
+func (repo *Postgres) ListBoards(ctx context.Context) ([]domain.Board, error) {
+	var boards []domain.Board
+	if err := repo.db.SelectContext(ctx, &boards, `
+		SELECT id, name, created_at FROM boards ORDER BY created_at ASC
+	`); err != nil {
+		return nil, fmt.Errorf("list boards: %w", err)
+	}
+	if boards == nil {
+		boards = []domain.Board{}
+	}
+	return boards, nil
+}
+
+func (repo *Postgres) CreateBoard(ctx context.Context, name string) (domain.Board, error) {
+	boardID := uuid.New().String()
+
+	tx, err := repo.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return domain.Board{}, fmt.Errorf("begin create board transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO boards (id, name) VALUES ($1, $2)
+	`, boardID, name); err != nil {
+		return domain.Board{}, fmt.Errorf("insert board: %w", err)
+	}
+
+	for position, columnName := range defaultColumnNames {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO columns (id, board_id, name, position) VALUES ($1, $2, $3, $4)
+		`, uuid.New().String(), boardID, columnName, position); err != nil {
+			return domain.Board{}, fmt.Errorf("insert column: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return domain.Board{}, fmt.Errorf("commit create board: %w", err)
+	}
+	return repo.GetBoardWithColumnsAndCards(ctx, boardID)
+}
+
+func (repo *Postgres) getTodoColumnID(ctx context.Context, boardID string) (string, error) {
+	var columnID string
+	if err := repo.db.GetContext(ctx, &columnID, `
+		SELECT id FROM columns WHERE board_id = $1 AND position = 0
+	`, boardID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("todo column not found")
+		}
+		return "", fmt.Errorf("get todo column: %w", err)
+	}
+	return columnID, nil
+}
+
+func (repo *Postgres) getCardBoardID(ctx context.Context, cardID string) (string, error) {
+	var boardID string
+	if err := repo.db.GetContext(ctx, &boardID, `
+		SELECT col.board_id
+		FROM cards c
+		INNER JOIN columns col ON col.id = c.column_id
+		WHERE c.id = $1
+	`, cardID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("card not found")
+		}
+		return "", fmt.Errorf("get card board: %w", err)
+	}
+	return boardID, nil
+}
+
+func (repo *Postgres) getColumnBoardID(ctx context.Context, columnID string) (string, error) {
+	var boardID string
+	if err := repo.db.GetContext(ctx, &boardID, `SELECT board_id FROM columns WHERE id = $1`, columnID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("column not found")
+		}
+		return "", fmt.Errorf("get column board: %w", err)
+	}
+	return boardID, nil
+}
+
+func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context, boardID string) (domain.Board, error) {
 	var board domain.Board
 	if err := repo.db.GetContext(ctx, &board, `
 		SELECT id, name, created_at FROM boards WHERE id = $1
-	`, defaultBoardID); err != nil {
+	`, boardID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Board{}, fmt.Errorf("board not found")
+		}
 		return domain.Board{}, fmt.Errorf("get board: %w", err)
 	}
 
@@ -41,7 +123,7 @@ func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context) (domain.B
 		FROM columns
 		WHERE board_id = $1
 		ORDER BY position ASC
-	`, defaultBoardID); err != nil {
+	`, boardID); err != nil {
 		return domain.Board{}, fmt.Errorf("get columns: %w", err)
 	}
 
@@ -52,7 +134,7 @@ func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context) (domain.B
 		INNER JOIN columns col ON col.id = c.column_id
 		WHERE col.board_id = $1 AND c.archived = false
 		ORDER BY c.position ASC
-	`, defaultBoardID); err != nil {
+	`, boardID); err != nil {
 		return domain.Board{}, fmt.Errorf("get cards: %w", err)
 	}
 
@@ -91,6 +173,11 @@ func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context) (domain.B
 			columnCards[cardIndex].ColumnName = columns[index].Name
 		}
 		columns[index].Cards = domain.PrepareColumnCards(columnCards)
+	}
+
+	todoColumnID, err := repo.getTodoColumnID(ctx, boardID)
+	if err != nil {
+		return domain.Board{}, err
 	}
 
 	board.Columns = columns
@@ -134,7 +221,7 @@ func (repo *Postgres) GetColumnWithCards(ctx context.Context, columnID string) (
 		}
 	}
 
-	cardIndex, err := repo.getCardHierarchyIndex(ctx)
+	cardIndex, err := repo.getCardHierarchyIndex(ctx, column.BoardID)
 	if err != nil {
 		return domain.Column{}, err
 	}
@@ -144,21 +231,26 @@ func (repo *Postgres) GetColumnWithCards(ctx context.Context, columnID string) (
 	return column, nil
 }
 
-func (repo *Postgres) getCardHierarchyIndex(ctx context.Context) (map[string]domain.Card, error) {
+func (repo *Postgres) getCardHierarchyIndex(ctx context.Context, boardID string) (map[string]domain.Card, error) {
 	var cards []domain.Card
 	if err := repo.db.SelectContext(ctx, &cards, `
 		SELECT c.id, c.card_type, c.parent_card_id
 		FROM cards c
 		INNER JOIN columns col ON col.id = c.column_id
 		WHERE col.board_id = $1
-	`, defaultBoardID); err != nil {
+	`, boardID); err != nil {
 		return nil, fmt.Errorf("get card hierarchy: %w", err)
 	}
 	return domain.BuildCardIndex(cards), nil
 }
 
-func (repo *Postgres) CreateCard(ctx context.Context, cardType domain.CardType, parentCardID, title, description string) (domain.Card, error) {
-	if err := repo.validateCardHierarchy(ctx, cardType, parentCardID); err != nil {
+func (repo *Postgres) CreateCard(ctx context.Context, boardID string, cardType domain.CardType, parentCardID, title, description string) (domain.Card, error) {
+	if err := repo.validateCardHierarchy(ctx, boardID, cardType, parentCardID); err != nil {
+		return domain.Card{}, err
+	}
+
+	todoColumnID, err := repo.getTodoColumnID(ctx, boardID)
+	if err != nil {
 		return domain.Card{}, err
 	}
 
@@ -179,7 +271,7 @@ func (repo *Postgres) CreateCard(ctx context.Context, cardType domain.CardType, 
 		Position:     maxPosition + 1,
 	}
 
-	_, err := repo.db.NamedExecContext(ctx, `
+	_, err = repo.db.NamedExecContext(ctx, `
 		INSERT INTO cards (id, column_id, card_type, parent_card_id, title, description, position)
 		VALUES (:id, :column_id, :card_type, :parent_card_id, :title, :description, :position)
 	`, card)
@@ -187,7 +279,7 @@ func (repo *Postgres) CreateCard(ctx context.Context, cardType domain.CardType, 
 		return domain.Card{}, fmt.Errorf("insert card: %w", err)
 	}
 
-	if err := repo.db.GetContext(ctx, &card.CreatedAt, `SELECT created_at FROM cards WHERE id = $1`, card.ID); err != nil {
+	if err = repo.db.GetContext(ctx, &card.CreatedAt, `SELECT created_at FROM cards WHERE id = $1`, card.ID); err != nil {
 		return domain.Card{}, fmt.Errorf("get created_at: %w", err)
 	}
 
@@ -204,7 +296,7 @@ func (repo *Postgres) CreateCard(ctx context.Context, cardType domain.CardType, 
 	return card, nil
 }
 
-func (repo *Postgres) validateCardHierarchy(ctx context.Context, cardType domain.CardType, parentCardID string) error {
+func (repo *Postgres) validateCardHierarchy(ctx context.Context, boardID string, cardType domain.CardType, parentCardID string) error {
 	if !cardType.IsValid() {
 		return fmt.Errorf("invalid card type")
 	}
@@ -225,6 +317,9 @@ func (repo *Postgres) validateCardHierarchy(ctx context.Context, cardType domain
 		if parent.CardType != domain.CardTypeProject {
 			return fmt.Errorf("story parent must be a project")
 		}
+		if err := repo.ensureCardOnBoard(ctx, parentCardID, boardID); err != nil {
+			return err
+		}
 	case domain.CardTypeTask:
 		if parentCardID == "" {
 			return fmt.Errorf("task requires a parent story")
@@ -236,18 +331,32 @@ func (repo *Postgres) validateCardHierarchy(ctx context.Context, cardType domain
 		if parent.CardType != domain.CardTypeStory {
 			return fmt.Errorf("task parent must be a story")
 		}
+		if err := repo.ensureCardOnBoard(ctx, parentCardID, boardID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (repo *Postgres) GetBoardColumns(ctx context.Context) ([]domain.Column, error) {
+func (repo *Postgres) ensureCardOnBoard(ctx context.Context, cardID, boardID string) error {
+	cardBoardID, err := repo.getCardBoardID(ctx, cardID)
+	if err != nil {
+		return err
+	}
+	if cardBoardID != boardID {
+		return fmt.Errorf("parent card belongs to a different board")
+	}
+	return nil
+}
+
+func (repo *Postgres) GetBoardColumns(ctx context.Context, boardID string) ([]domain.Column, error) {
 	var columns []domain.Column
 	if err := repo.db.SelectContext(ctx, &columns, `
 		SELECT id, board_id, name, position, created_at
 		FROM columns
 		WHERE board_id = $1
 		ORDER BY position ASC
-	`, defaultBoardID); err != nil {
+	`, boardID); err != nil {
 		return nil, fmt.Errorf("get board columns: %w", err)
 	}
 	if columns == nil {
@@ -269,7 +378,17 @@ func (repo *Postgres) GetCardDetail(ctx context.Context, cardID string) (domain.
 		return domain.CardDetail{}, fmt.Errorf("get column name: %w", err)
 	}
 
-	columns, err := repo.GetBoardColumns(ctx)
+	boardID, err := repo.getCardBoardID(ctx, cardID)
+	if err != nil {
+		return domain.CardDetail{}, err
+	}
+
+	columns, err := repo.GetBoardColumns(ctx, boardID)
+	if err != nil {
+		return domain.CardDetail{}, err
+	}
+
+	todoColumnID, err := repo.getTodoColumnID(ctx, boardID)
 	if err != nil {
 		return domain.CardDetail{}, err
 	}
@@ -290,6 +409,7 @@ func (repo *Postgres) GetCardDetail(ctx context.Context, cardID string) (domain.
 
 	return domain.CardDetail{
 		Card:         card,
+		BoardID:      boardID,
 		ColumnName:   columnName,
 		Columns:      columns,
 		Children:     children,
@@ -417,6 +537,18 @@ func (repo *Postgres) MoveCard(ctx context.Context, cardID, toColumnID string, p
 		return fmt.Errorf("position must be non-negative")
 	}
 
+	fromBoardID, err := repo.getColumnBoardID(ctx, fromColumnID)
+	if err != nil {
+		return err
+	}
+	toBoardID, err := repo.getColumnBoardID(ctx, toColumnID)
+	if err != nil {
+		return err
+	}
+	if fromBoardID != toBoardID {
+		return fmt.Errorf("cannot move card to a different board")
+	}
+
 	tx, err := repo.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin move transaction: %w", err)
@@ -526,7 +658,7 @@ func (repo *Postgres) archiveCardsWithDescendants(ctx context.Context, rootCardI
 	return nil
 }
 
-func (repo *Postgres) ListArchivedStories(ctx context.Context, query string, page int) (domain.ArchivedStoriesPage, error) {
+func (repo *Postgres) ListArchivedStories(ctx context.Context, boardID, query string, page int) (domain.ArchivedStoriesPage, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -542,7 +674,7 @@ func (repo *Postgres) ListArchivedStories(ctx context.Context, query string, pag
 			AND c.archived = true
 			AND ($2 = '' OR c.title ILIKE $3 OR c.description ILIKE $3)
 	`
-	if err := repo.db.GetContext(ctx, &totalCount, countQuery, defaultBoardID, query, searchPattern); err != nil {
+	if err := repo.db.GetContext(ctx, &totalCount, countQuery, boardID, query, searchPattern); err != nil {
 		return domain.ArchivedStoriesPage{}, fmt.Errorf("count archived stories: %w", err)
 	}
 
@@ -569,7 +701,7 @@ func (repo *Postgres) ListArchivedStories(ctx context.Context, query string, pag
 		ORDER BY c.created_at DESC
 		LIMIT $4 OFFSET $5
 	`
-	if err := repo.db.SelectContext(ctx, &stories, listQuery, defaultBoardID, query, searchPattern, archivedPageSize, offset); err != nil {
+	if err := repo.db.SelectContext(ctx, &stories, listQuery, boardID, query, searchPattern, archivedPageSize, offset); err != nil {
 		return domain.ArchivedStoriesPage{}, fmt.Errorf("list archived stories: %w", err)
 	}
 	if stories == nil {
@@ -577,6 +709,7 @@ func (repo *Postgres) ListArchivedStories(ctx context.Context, query string, pag
 	}
 
 	return domain.ArchivedStoriesPage{
+		BoardID:    boardID,
 		Stories:    stories,
 		Query:      query,
 		Page:       page,

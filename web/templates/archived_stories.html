@@ -10,7 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
 </head>
 <body class="bg-slate-50 min-h-screen">
-    <div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto px-4 py-8" data-board-id="{{.BoardID}}">
         {{template "archived_stories_body" .}}
     </div>
     <div id="card-modal"></div>
@@ -24,14 +24,14 @@
 <header class="mb-8">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-            <a href="/" class="text-sm text-blue-600 hover:underline">&larr; Back to board</a>
+            <a href="/boards/{{.BoardID}}" class="text-sm text-blue-600 hover:underline">&larr; Back to board</a>
             <h1 class="text-3xl font-bold text-slate-800 mt-2">Archived stories</h1>
             <p class="text-slate-500 mt-1">{{.TotalCount}} archived {{if eq .TotalCount 1}}story{{else}}stories{{end}}</p>
         </div>
     </div>
 </header>
 
-<form method="GET" action="/archived/stories" class="mb-6">
+<form method="GET" action="/boards/{{.BoardID}}/archived/stories" class="mb-6">
     <div class="flex gap-2">
         <input
             type="search"
@@ -88,7 +88,7 @@
     <div class="flex gap-2">
         {{if .HasPreviousPage}}
         <a
-            href="/archived/stories?q={{.Query}}&page={{.PreviousPage}}"
+            href="/boards/{{.BoardID}}/archived/stories?q={{.Query}}&page={{.PreviousPage}}"
             class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
             Previous
@@ -96,7 +96,7 @@
         {{end}}
         {{if .HasNextPage}}
         <a
-            href="/archived/stories?q={{.Query}}&page={{.NextPage}}"
+            href="/boards/{{.BoardID}}/archived/stories?q={{.Query}}&page={{.NextPage}}"
             class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
             Next

@@ -15,16 +15,24 @@ func NewKanban(repo *repository.Postgres) *Kanban {
 	return &Kanban{repo: repo}
 }
 
-func (uc *Kanban) GetBoard(ctx context.Context) (domain.Board, error) {
-	return uc.repo.GetBoardWithColumnsAndCards(ctx)
+func (uc *Kanban) ListBoards(ctx context.Context) ([]domain.Board, error) {
+	return uc.repo.ListBoards(ctx)
+}
+
+func (uc *Kanban) CreateBoard(ctx context.Context, name string) (domain.Board, error) {
+	return uc.repo.CreateBoard(ctx, name)
+}
+
+func (uc *Kanban) GetBoard(ctx context.Context, boardID string) (domain.Board, error) {
+	return uc.repo.GetBoardWithColumnsAndCards(ctx, boardID)
 }
 
 func (uc *Kanban) GetColumn(ctx context.Context, columnID string) (domain.Column, error) {
 	return uc.repo.GetColumnWithCards(ctx, columnID)
 }
 
-func (uc *Kanban) CreateCard(ctx context.Context, cardType domain.CardType, parentCardID, title, description string) (domain.Card, error) {
-	return uc.repo.CreateCard(ctx, cardType, parentCardID, title, description)
+func (uc *Kanban) CreateCard(ctx context.Context, boardID string, cardType domain.CardType, parentCardID, title, description string) (domain.Card, error) {
+	return uc.repo.CreateCard(ctx, boardID, cardType, parentCardID, title, description)
 }
 
 func (uc *Kanban) GetCard(ctx context.Context, cardID string) (domain.Card, error) {
@@ -104,6 +112,6 @@ func (uc *Kanban) ArchiveDoneInColumn(ctx context.Context, columnID string) (dom
 	return domain.ArchiveDoneResult{Column: column}, nil
 }
 
-func (uc *Kanban) ListArchivedStories(ctx context.Context, query string, page int) (domain.ArchivedStoriesPage, error) {
-	return uc.repo.ListArchivedStories(ctx, query, page)
+func (uc *Kanban) ListArchivedStories(ctx context.Context, boardID, query string, page int) (domain.ArchivedStoriesPage, error) {
+	return uc.repo.ListArchivedStories(ctx, boardID, query, page)
 }

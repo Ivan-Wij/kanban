@@ -108,23 +108,33 @@
             });
         }
 
-        var hideDoneStorageKey = 'kanban-hide-done-children';
-        var showArchivedStorageKey = 'kanban-show-archived-children';
+        function getBoardScopeID() {
+            var boardRoot = document.querySelector('[data-board-id]');
+            return boardRoot ? boardRoot.getAttribute('data-board-id') : '';
+        }
+
+        function hideDoneStorageKey() {
+            return 'kanban-hide-done-children-' + getBoardScopeID();
+        }
+
+        function showArchivedStorageKey() {
+            return 'kanban-show-archived-children-' + getBoardScopeID();
+        }
 
         function isHideDoneEnabled() {
-            return localStorage.getItem(hideDoneStorageKey) === 'true';
+            return localStorage.getItem(hideDoneStorageKey()) === 'true';
         }
 
         function setHideDoneEnabled(enabled) {
-            localStorage.setItem(hideDoneStorageKey, enabled ? 'true' : 'false');
+            localStorage.setItem(hideDoneStorageKey(), enabled ? 'true' : 'false');
         }
 
         function isShowArchivedEnabled() {
-            return localStorage.getItem(showArchivedStorageKey) === 'true';
+            return localStorage.getItem(showArchivedStorageKey()) === 'true';
         }
 
         function setShowArchivedEnabled(enabled) {
-            localStorage.setItem(showArchivedStorageKey, enabled ? 'true' : 'false');
+            localStorage.setItem(showArchivedStorageKey(), enabled ? 'true' : 'false');
         }
 
         function openChildFilterModal() {
@@ -222,10 +232,12 @@
             applyChildFilters();
         }
 
-        var projectFilterStorageKey = 'kanban-project-filter';
+        function projectFilterStorageKey() {
+            return 'kanban-project-filter-' + getBoardScopeID();
+        }
 
         function getSelectedProjectIds() {
-            var stored = localStorage.getItem(projectFilterStorageKey);
+            var stored = localStorage.getItem(projectFilterStorageKey());
             if (!stored) {
                 return [];
             }
@@ -238,7 +250,7 @@
         }
 
         function setSelectedProjectIds(projectIds) {
-            localStorage.setItem(projectFilterStorageKey, JSON.stringify(projectIds));
+            localStorage.setItem(projectFilterStorageKey(), JSON.stringify(projectIds));
         }
 
         function filterProjectOptions(query) {

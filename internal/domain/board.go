@@ -46,8 +46,13 @@ type Card struct {
 	Archived           bool      `db:"archived"`
 }
 
+type BoardListPage struct {
+	Boards []Board
+}
+
 type CardDetail struct {
 	Card
+	BoardID      string
 	ColumnName   string
 	Columns      []Column
 	Children     []Card
@@ -74,12 +79,14 @@ type DeleteCardResult struct {
 }
 
 type CreateCardForm struct {
+	BoardID      string
 	Projects     []Card
 	Stories      []Card
 	TodoColumnID string
 }
 
 type ArchivedStoriesPage struct {
+	BoardID    string
 	Stories    []Card
 	Query      string
 	Page       int

@@ -1,0 +1,62 @@
+{{define "boards.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boards - Kanban</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.js" integrity="sha384-Q+Dky3iHVJOr6wUjQ4ulh6uQ76an/t+ak1+PjMVaxRjbZamFLAG+u9InkfjbsEQf" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        {{template "boards_body" .}}
+    </div>
+    <div id="card-modal"></div>
+    <div id="create-modal"></div>
+    {{template "layout_scripts" .}}
+</body>
+</html>
+{{end}}
+
+{{define "boards_body"}}
+<header class="mb-8">
+    <h1 class="text-3xl font-bold text-slate-800">Boards</h1>
+    <p class="text-slate-500 mt-1">Select a board or create a new one.</p>
+</header>
+
+<form method="POST" action="/boards" class="mb-8 flex gap-2">
+    <input
+        type="text"
+        name="name"
+        placeholder="New board name"
+        required
+        class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+    <button
+        type="submit"
+        class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+    >
+        Create board
+    </button>
+</form>
+
+{{if .Boards}}
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {{range .Boards}}
+    <a
+        href="/boards/{{.ID}}"
+        class="block rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-blue-300 hover:shadow-md transition"
+    >
+        <h2 class="text-lg font-semibold text-slate-800">{{.Name}}</h2>
+        <p class="text-sm text-slate-500 mt-1">Created {{.CreatedAt.Format "Jan 2, 2006"}}</p>
+    </a>
+    {{end}}
+</div>
+{{else}}
+<div class="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+    <p class="text-slate-500">No boards yet. Create your first board above.</p>
+</div>
+{{end}}
+{{end}}

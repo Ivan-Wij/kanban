@@ -8,13 +8,14 @@ import (
 )
 
 func (handler *Handler) ShowArchivedStories(ctx *echo.Context) error {
+	boardID := ctx.Param("boardID")
 	query := ctx.Request().URL.Query().Get("q")
 	page, err := strconv.Atoi(ctx.Request().URL.Query().Get("page"))
 	if err != nil || page < 1 {
 		page = 1
 	}
 
-	result, err := handler.uc.ListArchivedStories(ctx.Request().Context(), query, page)
+	result, err := handler.uc.ListArchivedStories(ctx.Request().Context(), boardID, query, page)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

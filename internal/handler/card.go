@@ -46,6 +46,7 @@ func (handler *Handler) cardForBoard(ctx *echo.Context, cardID string) (domain.C
 }
 
 func (handler *Handler) CreateCard(ctx *echo.Context) error {
+	boardID := ctx.Param("boardID")
 	var form createCardForm
 	if err := ctx.Bind(&form); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -59,13 +60,13 @@ func (handler *Handler) CreateCard(ctx *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid card type")
 	}
 
-	card, err := handler.uc.CreateCard(ctx.Request().Context(), cardType, form.ParentCardID, form.Title, form.Description)
+	card, err := handler.uc.CreateCard(ctx.Request().Context(), boardID, cardType, form.ParentCardID, form.Title, form.Description)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	if form.FromCreateModal == "true" {
-		board, err := handler.uc.GetBoard(ctx.Request().Context())
+		board, err := handler.uc.GetBoard(ctx.Request().Context(), boardID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -104,11 +105,13 @@ func (handler *Handler) CreateCard(ctx *echo.Context) error {
 }
 
 func (handler *Handler) ShowCreateCardModal(ctx *echo.Context) error {
-	board, err := handler.uc.GetBoard(ctx.Request().Context())
+	boardID := ctx.Param("boardID")
+	board, err := handler.uc.GetBoard(ctx.Request().Context(), boardID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 	return handler.renderer.HTMLFragment(ctx, http.StatusOK, "create_card_modal.html", domain.CreateCardForm{
+		BoardID:      board.ID,
 		Projects:     board.Projects,
 		Stories:      board.Stories,
 		TodoColumnID: board.TodoColumnID,

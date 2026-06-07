@@ -1,21 +1,43 @@
-{{template "layout" .}}
-{{define "title"}}{{.Name}} - Kanban{{end}}
-{{define "content"}}
+{{define "board.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Name}} - Kanban</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.js" integrity="sha384-Q+Dky3iHVJOr6wUjQ4ulh6uQ76an/t+ak1+PjMVaxRjbZamFLAG+u9InkfjbsEQf" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        {{template "board_body" .}}
+    </div>
+    <div id="card-modal"></div>
+    <div id="create-modal"></div>
+    {{template "layout_scripts" .}}
+</body>
+</html>
+{{end}}
+
+{{define "board_body"}}
+<div data-board-id="{{.ID}}">
 <header class="mb-8 flex items-start justify-between gap-4">
     <div>
-        <h1 class="text-3xl font-bold text-slate-800">{{.Name}}</h1>
+        <a href="/" class="text-sm text-blue-600 hover:underline">&larr; All boards</a>
+        <h1 class="text-3xl font-bold text-slate-800 mt-2">{{.Name}}</h1>
         <p class="text-slate-500 mt-1">Drag cards between columns to update status.</p>
     </div>
     <div class="flex shrink-0 items-center gap-2">
         <a
-            href="/archived/stories"
+            href="/boards/{{.ID}}/archived/stories"
             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
             Archived stories
         </a>
         <button
             type="button"
-            hx-get="/cards/new"
+            hx-get="/boards/{{.ID}}/cards/new"
             hx-target="#create-modal"
             hx-swap="innerHTML"
             class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -31,5 +53,6 @@
     {{range .Columns}}
         {{template "column.html" .}}
     {{end}}
+</div>
 </div>
 {{end}}
