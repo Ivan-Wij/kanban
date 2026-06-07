@@ -1,0 +1,35 @@
+{{define "card.html"}}
+<li
+    id="card-{{.ID}}"
+    data-card-id="{{.ID}}"
+    class="bg-white rounded-lg border border-slate-200 p-3 shadow-sm
+        {{if .ParentInSameColumn}}border-l-4 border-l-slate-400{{end}}
+        {{if .ParentInSameColumn}}{{if eq .GroupDepth 1}}ml-3{{else if eq .GroupDepth 2}}ml-6{{else}}ml-9{{end}}{{end}}"
+>
+    <div class="flex gap-2">
+        <span class="drag-handle cursor-grab text-slate-300 hover:text-slate-500 select-none" title="Drag">⠿</span>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-medium px-2 py-0.5 rounded
+                    {{if eq .CardType "project"}}bg-purple-100 text-purple-700
+                    {{else if eq .CardType "story"}}bg-blue-100 text-blue-700
+                    {{else}}bg-emerald-100 text-emerald-700{{end}}">
+                    {{.CardType.Label}}
+                </span>
+                {{if not .ParentInSameColumn}}
+                    {{template "parent_link_board" .}}
+                {{end}}
+            </div>
+            <button
+                type="button"
+                class="w-full text-left"
+                hx-get="/cards/{{.ID}}/detail"
+                hx-target="#card-modal"
+                hx-swap="innerHTML"
+            >
+                <h3 class="font-medium text-slate-800">{{.Title}}</h3>
+            </button>
+        </div>
+    </div>
+</li>
+{{end}}

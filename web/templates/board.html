@@ -1,0 +1,25 @@
+{{template "layout" .}}
+{{define "title"}}{{.Name}} - Kanban{{end}}
+{{define "content"}}
+<header class="mb-8 flex items-start justify-between gap-4">
+    <div>
+        <h1 class="text-3xl font-bold text-slate-800">{{.Name}}</h1>
+        <p class="text-slate-500 mt-1">Drag cards between columns to update status.</p>
+    </div>
+    <button
+        type="button"
+        hx-get="/cards/new"
+        hx-target="#create-modal"
+        hx-swap="innerHTML"
+        class="shrink-0 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+    >
+        Create
+    </button>
+</header>
+
+<div class="flex gap-4 overflow-x-auto pb-4">
+    {{range .Columns}}
+        {{template "column.html" .}}
+    {{end}}
+</div>
+{{end}}

@@ -1,0 +1,27 @@
+{{define "parent_link_board"}}
+{{if .ParentTitle}}
+<button
+    type="button"
+    hx-get="/cards/{{.ParentCardID}}/detail"
+    hx-target="#card-modal"
+    hx-swap="innerHTML"
+    class="text-xs text-blue-600 hover:underline truncate"
+>
+    under {{.ParentTitle}}
+</button>
+{{end}}
+{{end}}
+
+{{define "parent_link_detail"}}
+{{if .ParentTitle}}
+<button
+    type="button"
+    hx-get="/cards/{{.ParentCardID}}/detail"
+    hx-target="#card-modal"
+    hx-swap="innerHTML"
+    class="text-sm text-blue-600 hover:underline mt-2"
+>
+    Under {{.ParentTitle}}
+</button>
+{{end}}
+{{end}}

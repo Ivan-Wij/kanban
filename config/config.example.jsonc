@@ -1,0 +1,6 @@
+{
+  // server listen port
+  "port": "8080",
+  // native PostgreSQL connection string
+  "database_url": "postgres://user:pass@localhost:5432/kanban?sslmode=disable"
+}

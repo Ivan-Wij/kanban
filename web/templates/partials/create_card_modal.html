@@ -1,0 +1,117 @@
+{{define "create_card_modal.html"}}
+<div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    onclick="if (event.target === this) closeCreateModal()"
+>
+    <div
+        class="bg-white rounded-xl shadow-xl w-full max-w-lg"
+        onclick="event.stopPropagation()"
+    >
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+            <h2 class="text-lg font-semibold text-slate-800">Create card</h2>
+            <button
+                type="button"
+                onclick="closeCreateModal()"
+                class="text-slate-400 hover:text-slate-600 text-2xl leading-none"
+            >
+                &times;
+            </button>
+        </div>
+
+        <form
+            hx-post="/cards"
+            hx-swap="none"
+            data-create-card-form
+            class="px-6 py-4 space-y-4"
+        >
+            <input type="hidden" name="from_create_modal" value="true">
+
+            <div>
+                <label for="create-card-type" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Type</label>
+                <select
+                    name="card_type"
+                    id="create-card-type"
+                    required
+                    onchange="updateCreateParentSelect()"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="project" selected>Project</option>
+                    <option value="story">Story</option>
+                    <option value="task">Task</option>
+                </select>
+            </div>
+
+            <div id="create-parent-project-wrap" class="hidden">
+                <label for="create-parent-project" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Parent project</label>
+                <select
+                    name="parent_card_id"
+                    id="create-parent-project"
+                    disabled
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="">Select project</option>
+                    {{range .Projects}}
+                    <option value="{{.ID}}">{{.Title}}</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <div id="create-parent-story-wrap" class="hidden">
+                <label for="create-parent-story" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Parent story</label>
+                <select
+                    name="parent_card_id"
+                    id="create-parent-story"
+                    disabled
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="">Select story</option>
+                    {{range .Stories}}
+                    <option value="{{.ID}}">{{.Title}}</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <div>
+                <label for="create-card-title" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Title</label>
+                <input
+                    type="text"
+                    name="title"
+                    id="create-card-title"
+                    placeholder="Card title"
+                    required
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+            </div>
+
+            <div>
+                <label for="create-card-description" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Description</label>
+                <textarea
+                    name="description"
+                    id="create-card-description"
+                    placeholder="Description (optional)"
+                    rows="3"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                ></textarea>
+            </div>
+
+            <p class="text-xs text-slate-500">New cards are added to To Do.</p>
+
+            <div class="flex gap-2 pt-2">
+                <button
+                    type="submit"
+                    class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                    Create
+                </button>
+                <button
+                    type="button"
+                    onclick="closeCreateModal()"
+                    class="rounded bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                >
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}

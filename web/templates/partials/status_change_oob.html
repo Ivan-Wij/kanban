@@ -1,0 +1,15 @@
+{{define "status_change_oob.html"}}
+<div id="card-modal" hx-swap-oob="innerHTML">
+    {{template "card_detail.html" .ModalDetail}}
+</div>
+{{if .Moved}}
+<div id="column-{{.SourceColumn.ID}}" hx-swap-oob="outerHTML">
+    {{template "column.html" .SourceColumn}}
+</div>
+{{if ne .SourceColumn.ID .TargetColumn.ID}}
+<div id="column-{{.TargetColumn.ID}}" hx-swap-oob="outerHTML">
+    {{template "column.html" .TargetColumn}}
+</div>
+{{end}}
+{{end}}
+{{end}}

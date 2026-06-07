@@ -1,0 +1,6 @@
+{{define "delete_card_oob.html"}}
+<div id="card-modal" hx-swap-oob="innerHTML"></div>
+{{range .DeletedIDs}}
+<div id="card-{{.}}" hx-swap-oob="delete"></div>
+{{end}}
+{{end}}
