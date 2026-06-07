@@ -1,0 +1,449 @@
+{{define "layout_scripts"}}
+    <script>
+        function closeCardModal() {
+            document.getElementById('card-modal').innerHTML = '';
+        }
+
+        function closeCreateModal() {
+            document.getElementById('create-modal').innerHTML = '';
+        }
+
+        function updateCreateParentSelect() {
+            var cardTypeSelect = document.getElementById('create-card-type');
+            if (!cardTypeSelect) {
+                return;
+            }
+            var cardType = cardTypeSelect.value;
+            var projectWrap = document.getElementById('create-parent-project-wrap');
+            var storyWrap = document.getElementById('create-parent-story-wrap');
+            var projectSelect = document.getElementById('create-parent-project');
+            var storySelect = document.getElementById('create-parent-story');
+
+            projectWrap.classList.add('hidden');
+            storyWrap.classList.add('hidden');
+            projectSelect.disabled = true;
+            storySelect.disabled = true;
+
+            if (cardType === 'story') {
+                projectWrap.classList.remove('hidden');
+                projectSelect.disabled = false;
+            }
+            if (cardType === 'task') {
+                storyWrap.classList.remove('hidden');
+                storySelect.disabled = false;
+            }
+        }
+
+        function initCreateCardForm() {
+            if (document.querySelector('[data-create-card-form]')) {
+                updateCreateParentSelect();
+            }
+        }
+
+        function closeStatusDropdowns() {
+            document.querySelectorAll('[id^="status-menu-"]').forEach(function (menu) {
+                menu.classList.add('hidden');
+            });
+        }
+
+        function toggleStatusDropdown(cardID) {
+            var menu = document.getElementById('status-menu-' + cardID);
+            if (!menu) {
+                return;
+            }
+            var isHidden = menu.classList.contains('hidden');
+            closeStatusDropdowns();
+            if (isHidden) {
+                menu.classList.remove('hidden');
+            }
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeStatusDropdowns();
+                closeProjectFilterPanel();
+                closeChildFilterModal();
+                closeCreateModal();
+                closeCardModal();
+            }
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!event.target.closest('[id^="status-dropdown-"]')) {
+                closeStatusDropdowns();
+            }
+            if (!event.target.closest('[data-project-filter]')) {
+                closeProjectFilterPanel();
+            }
+        }, true);
+
+        function initSortable() {
+            document.querySelectorAll('[data-sortable-column]').forEach(function (columnList) {
+                if (columnList.sortableInstance) {
+                    columnList.sortableInstance.destroy();
+                }
+                columnList.sortableInstance = new Sortable(columnList, {
+                    group: 'kanban-cards',
+                    animation: 150,
+                    draggable: '[data-card-id]',
+                    filter: 'button, a',
+                    preventOnFilter: false,
+                    onEnd: function (event) {
+                        var cardElement = event.item;
+                        var cardID = cardElement.getAttribute('data-card-id');
+                        var targetColumn = event.to;
+                        var columnID = targetColumn.getAttribute('data-column-id');
+                        var position = event.newIndex;
+
+                        htmx.ajax('PUT', '/cards/' + cardID + '/move', {
+                            target: '#column-' + columnID,
+                            swap: 'outerHTML',
+                            values: {
+                                column_id: columnID,
+                                position: position
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        var hideDoneStorageKey = 'kanban-hide-done-children';
+        var showArchivedStorageKey = 'kanban-show-archived-children';
+
+        function isHideDoneEnabled() {
+            return localStorage.getItem(hideDoneStorageKey) === 'true';
+        }
+
+        function setHideDoneEnabled(enabled) {
+            localStorage.setItem(hideDoneStorageKey, enabled ? 'true' : 'false');
+        }
+
+        function isShowArchivedEnabled() {
+            return localStorage.getItem(showArchivedStorageKey) === 'true';
+        }
+
+        function setShowArchivedEnabled(enabled) {
+            localStorage.setItem(showArchivedStorageKey, enabled ? 'true' : 'false');
+        }
+
+        function openChildFilterModal() {
+            var modal = document.getElementById('child-filter-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+            syncChildFilterCheckboxes();
+        }
+
+        function closeChildFilterModal() {
+            var modal = document.getElementById('child-filter-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function syncChildFilterCheckboxes() {
+            var hideDone = isHideDoneEnabled();
+            var showArchived = isShowArchivedEnabled();
+            document.querySelectorAll('[data-hide-done-filter]').forEach(function (checkbox) {
+                checkbox.checked = hideDone;
+            });
+            document.querySelectorAll('[data-show-archived-filter]').forEach(function (checkbox) {
+                checkbox.checked = showArchived;
+            });
+        }
+
+        function applyChildFilters() {
+            var hideDone = isHideDoneEnabled();
+            var showArchived = isShowArchivedEnabled();
+            var filtersActive = hideDone || showArchived;
+
+            syncChildFilterCheckboxes();
+            document.querySelectorAll('[data-child-filter-active]').forEach(function (badge) {
+                badge.classList.toggle('hidden', !filtersActive);
+            });
+
+            document.querySelectorAll('[data-child-list] > li').forEach(function (item) {
+                var isDone = item.hasAttribute('data-child-done');
+                var isArchived = item.hasAttribute('data-child-archived');
+                var visible = true;
+                if (isArchived && !showArchived) {
+                    visible = false;
+                }
+                if (hideDone && isDone && visible) {
+                    visible = false;
+                }
+                item.classList.toggle('hidden', !visible);
+            });
+
+            document.querySelectorAll('[data-children-section]').forEach(function (section) {
+                var list = section.querySelector('[data-child-list]');
+                var allDoneMessage = section.querySelector('[data-all-done-hidden]');
+                var allArchivedMessage = section.querySelector('[data-all-archived-hidden]');
+                if (!list) {
+                    return;
+                }
+
+                var visibleItems = list.querySelectorAll('li:not(.hidden)');
+                var hasDoneItems = list.querySelector('[data-child-done="true"]') !== null;
+                var hasArchivedItems = list.querySelector('[data-child-archived="true"]') !== null;
+
+                if (allDoneMessage) {
+                    var showAllDoneMessage = hideDone && hasDoneItems && visibleItems.length === 0;
+                    allDoneMessage.classList.toggle('hidden', !showAllDoneMessage);
+                }
+                if (allArchivedMessage) {
+                    var showAllArchivedMessage = !showArchived && hasArchivedItems && visibleItems.length === 0;
+                    allArchivedMessage.classList.toggle('hidden', !showAllArchivedMessage);
+                }
+            });
+        }
+
+        function initChildFilters() {
+            var filterModal = document.getElementById('child-filter-modal');
+            if (filterModal && filterModal.dataset.childFilterInitialized !== 'true') {
+                filterModal.dataset.childFilterInitialized = 'true';
+
+                filterModal.querySelectorAll('[data-hide-done-filter]').forEach(function (checkbox) {
+                    checkbox.addEventListener('change', function () {
+                        setHideDoneEnabled(checkbox.checked);
+                        applyChildFilters();
+                    });
+                });
+
+                filterModal.querySelectorAll('[data-show-archived-filter]').forEach(function (checkbox) {
+                    checkbox.addEventListener('change', function () {
+                        setShowArchivedEnabled(checkbox.checked);
+                        applyChildFilters();
+                    });
+                });
+            }
+
+            applyChildFilters();
+        }
+
+        var projectFilterStorageKey = 'kanban-project-filter';
+
+        function getSelectedProjectIds() {
+            var stored = localStorage.getItem(projectFilterStorageKey);
+            if (!stored) {
+                return [];
+            }
+            try {
+                var parsed = JSON.parse(stored);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function setSelectedProjectIds(projectIds) {
+            localStorage.setItem(projectFilterStorageKey, JSON.stringify(projectIds));
+        }
+
+        function filterProjectOptions(query) {
+            var normalizedQuery = query.trim().toLowerCase();
+            document.querySelectorAll('[data-project-filter-option]').forEach(function (option) {
+                var title = (option.dataset.projectTitle || '').toLowerCase();
+                var visible = normalizedQuery === '' || title.indexOf(normalizedQuery) !== -1;
+                option.classList.toggle('hidden', !visible);
+            });
+        }
+
+        function closeProjectFilterPanel() {
+            document.querySelectorAll('[data-project-filter-panel]').forEach(function (panel) {
+                panel.classList.add('hidden');
+            });
+        }
+
+        function applyProjectFilter() {
+            var selected = getSelectedProjectIds();
+            var filterRoot = document.querySelector('[data-project-filter]');
+            if (!filterRoot) {
+                return;
+            }
+
+            var countBadge = filterRoot.querySelector('[data-project-filter-count]');
+            var clearButton = filterRoot.querySelector('[data-project-filter-clear]');
+            var chipsContainer = filterRoot.querySelector('[data-project-filter-chips]');
+            var hasFilter = selected.length > 0;
+
+            if (countBadge) {
+                countBadge.textContent = String(selected.length);
+                countBadge.classList.toggle('hidden', !hasFilter);
+            }
+            if (clearButton) {
+                clearButton.classList.toggle('hidden', !hasFilter);
+            }
+
+            filterRoot.querySelectorAll('[data-project-filter-checkbox]').forEach(function (checkbox) {
+                checkbox.checked = selected.indexOf(checkbox.value) !== -1;
+            });
+
+            if (chipsContainer) {
+                chipsContainer.innerHTML = '';
+                selected.forEach(function (projectId) {
+                    var checkbox = filterRoot.querySelector('[data-project-filter-checkbox][value="' + projectId + '"]');
+                    if (!checkbox) {
+                        return;
+                    }
+                    var option = checkbox.closest('[data-project-filter-option]');
+                    var titleElement = option ? option.querySelector('span.truncate') : null;
+                    var title = titleElement ? titleElement.textContent.trim() : 'Project';
+
+                    var chip = document.createElement('button');
+                    chip.type = 'button';
+                    chip.className = 'inline-flex items-center gap-1 rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700 hover:bg-purple-200';
+                    chip.addEventListener('click', function () {
+                        var updated = getSelectedProjectIds().filter(function (id) {
+                            return id !== projectId;
+                        });
+                        setSelectedProjectIds(updated);
+                        applyProjectFilter();
+                    });
+
+                    var titleSpan = document.createElement('span');
+                    titleSpan.textContent = title;
+                    var closeSpan = document.createElement('span');
+                    closeSpan.setAttribute('aria-hidden', 'true');
+                    closeSpan.textContent = '×';
+                    chip.appendChild(titleSpan);
+                    chip.appendChild(closeSpan);
+                    chipsContainer.appendChild(chip);
+                });
+            }
+
+            document.querySelectorAll('[data-card-id]').forEach(function (card) {
+                if (!hasFilter) {
+                    card.classList.remove('hidden');
+                    return;
+                }
+                var projectId = card.getAttribute('data-project-id');
+                var visible = projectId && selected.indexOf(projectId) !== -1;
+                card.classList.toggle('hidden', !visible);
+            });
+        }
+
+        function clearProjectFilter() {
+            setSelectedProjectIds([]);
+            var searchInput = document.querySelector('[data-project-filter-search]');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            filterProjectOptions('');
+            applyProjectFilter();
+        }
+
+        function initProjectFilter() {
+            var filterRoot = document.querySelector('[data-project-filter]');
+            if (!filterRoot) {
+                return;
+            }
+
+            if (filterRoot.dataset.projectFilterInitialized !== 'true') {
+                filterRoot.dataset.projectFilterInitialized = 'true';
+
+                var toggleButton = filterRoot.querySelector('[data-project-filter-toggle]');
+                var clearButton = filterRoot.querySelector('[data-project-filter-clear]');
+                var searchInput = filterRoot.querySelector('[data-project-filter-search]');
+
+                if (toggleButton) {
+                    toggleButton.addEventListener('click', function (event) {
+                        event.stopPropagation();
+                        var panel = filterRoot.querySelector('[data-project-filter-panel]');
+                        if (panel) {
+                            panel.classList.toggle('hidden');
+                        }
+                    });
+                }
+
+                if (clearButton) {
+                    clearButton.addEventListener('click', clearProjectFilter);
+                }
+
+                if (searchInput) {
+                    searchInput.addEventListener('input', function () {
+                        filterProjectOptions(searchInput.value);
+                    });
+                }
+
+                filterRoot.querySelectorAll('[data-project-filter-checkbox]').forEach(function (checkbox) {
+                    checkbox.addEventListener('change', function () {
+                        var selected = getSelectedProjectIds();
+                        if (checkbox.checked) {
+                            if (selected.indexOf(checkbox.value) === -1) {
+                                selected.push(checkbox.value);
+                            }
+                        } else {
+                            selected = selected.filter(function (id) {
+                                return id !== checkbox.value;
+                            });
+                        }
+                        setSelectedProjectIds(selected);
+                        applyProjectFilter();
+                    });
+                });
+            }
+
+            applyProjectFilter();
+        }
+
+        function initCardEditForms() {
+            document.querySelectorAll('[data-card-edit-form]').forEach(function (form) {
+                if (form.dataset.unsavedTrackerInitialized === 'true') {
+                    return;
+                }
+                form.dataset.unsavedTrackerInitialized = 'true';
+
+                var titleInput = form.querySelector('[name="title"]');
+                var descriptionInput = form.querySelector('[name="description"]');
+                var unsavedLabel = form.querySelector('[data-unsaved-label]');
+                if (!titleInput || !descriptionInput || !unsavedLabel) {
+                    return;
+                }
+
+                var originalTitle = titleInput.value;
+                var originalDescription = descriptionInput.value;
+
+                function updateUnsavedLabel() {
+                    var hasChanges = titleInput.value !== originalTitle
+                        || descriptionInput.value !== originalDescription;
+                    unsavedLabel.classList.toggle('hidden', !hasChanges);
+                }
+
+                titleInput.addEventListener('input', updateUnsavedLabel);
+                descriptionInput.addEventListener('input', updateUnsavedLabel);
+
+                form.addEventListener('htmx:afterRequest', function (event) {
+                    if (!event.detail.successful) {
+                        return;
+                    }
+                    originalTitle = titleInput.value;
+                    originalDescription = descriptionInput.value;
+                    updateUnsavedLabel();
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            initSortable();
+            initCardEditForms();
+            initCreateCardForm();
+            initChildFilters();
+            initProjectFilter();
+        });
+        document.body.addEventListener('htmx:afterSwap', function () {
+            initSortable();
+            initCardEditForms();
+            initCreateCardForm();
+            initChildFilters();
+            applyProjectFilter();
+        });
+        document.body.addEventListener('htmx:oobAfterSwap', function () {
+            initSortable();
+            initCardEditForms();
+            initChildFilters();
+            applyProjectFilter();
+        });
+    </script>
+{{end}}

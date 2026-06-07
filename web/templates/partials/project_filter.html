@@ -1,0 +1,59 @@
+{{define "project_filter"}}
+<div class="relative mb-6" data-project-filter>
+    <div class="flex flex-wrap items-center gap-3">
+        <button
+            type="button"
+            data-project-filter-toggle
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+            <span>Filter by project</span>
+            <span data-project-filter-count class="hidden rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"></span>
+            <span class="text-slate-400 text-xs">▾</span>
+        </button>
+        <button
+            type="button"
+            data-project-filter-clear
+            class="hidden text-sm text-slate-500 hover:text-slate-700"
+        >
+            Clear filter
+        </button>
+    </div>
+
+    <div
+        data-project-filter-panel
+        class="hidden absolute left-0 z-20 mt-2 w-80 rounded-lg border border-slate-200 bg-white shadow-lg"
+    >
+        <div class="border-b border-slate-200 p-3">
+            <input
+                type="search"
+                data-project-filter-search
+                placeholder="Search projects..."
+                class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+        </div>
+        <div class="max-h-60 overflow-y-auto p-2" data-project-filter-options>
+            {{if .Projects}}
+            {{range .Projects}}
+            <label
+                data-project-filter-option
+                data-project-title="{{.Title}}"
+                class="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm hover:bg-slate-50"
+            >
+                <input
+                    type="checkbox"
+                    value="{{.ID}}"
+                    data-project-filter-checkbox
+                    class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                >
+                <span class="truncate text-slate-800">{{.Title}}</span>
+            </label>
+            {{end}}
+            {{else}}
+            <p class="px-2 py-3 text-sm text-slate-400">No projects yet.</p>
+            {{end}}
+        </div>
+    </div>
+
+    <div data-project-filter-chips class="mt-3 flex flex-wrap gap-2"></div>
+</div>
+{{end}}

@@ -92,3 +92,18 @@ func (uc *Kanban) ChangeCardStatus(ctx context.Context, cardID, columnID string)
 		Moved:        moved,
 	}, nil
 }
+
+func (uc *Kanban) ArchiveDoneInColumn(ctx context.Context, columnID string) (domain.ArchiveDoneResult, error) {
+	if err := uc.repo.ArchiveDoneInColumn(ctx, columnID); err != nil {
+		return domain.ArchiveDoneResult{}, err
+	}
+	column, err := uc.repo.GetColumnWithCards(ctx, columnID)
+	if err != nil {
+		return domain.ArchiveDoneResult{}, err
+	}
+	return domain.ArchiveDoneResult{Column: column}, nil
+}
+
+func (uc *Kanban) ListArchivedStories(ctx context.Context, query string, page int) (domain.ArchivedStoriesPage, error) {
+	return uc.repo.ListArchivedStories(ctx, query, page)
+}

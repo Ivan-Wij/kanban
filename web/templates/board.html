@@ -6,16 +6,26 @@
         <h1 class="text-3xl font-bold text-slate-800">{{.Name}}</h1>
         <p class="text-slate-500 mt-1">Drag cards between columns to update status.</p>
     </div>
-    <button
-        type="button"
-        hx-get="/cards/new"
-        hx-target="#create-modal"
-        hx-swap="innerHTML"
-        class="shrink-0 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-    >
-        Create
-    </button>
+    <div class="flex shrink-0 items-center gap-2">
+        <a
+            href="/archived/stories"
+            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+            Archived stories
+        </a>
+        <button
+            type="button"
+            hx-get="/cards/new"
+            hx-target="#create-modal"
+            hx-swap="innerHTML"
+            class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+            Create
+        </button>
+    </div>
 </header>
+
+{{template "project_filter" .}}
 
 <div class="flex gap-4 overflow-x-auto pb-4">
     {{range .Columns}}

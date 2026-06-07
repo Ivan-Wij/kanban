@@ -3,13 +3,9 @@
     {{template "card_detail.html" .ModalDetail}}
 </div>
 {{if .Moved}}
-<div id="column-{{.SourceColumn.ID}}" hx-swap-oob="outerHTML">
-    {{template "column.html" .SourceColumn}}
-</div>
+{{template "column_oob.html" .SourceColumn}}
 {{if ne .SourceColumn.ID .TargetColumn.ID}}
-<div id="column-{{.TargetColumn.ID}}" hx-swap-oob="outerHTML">
-    {{template "column.html" .TargetColumn}}
-</div>
+{{template "column_oob.html" .TargetColumn}}
 {{end}}
 {{end}}
 {{end}}

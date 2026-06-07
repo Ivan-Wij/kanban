@@ -1,6 +1,4 @@
 {{define "create_card_board_oob.html"}}
 <div id="create-modal" hx-swap-oob="innerHTML"></div>
-<div id="column-{{.Column.ID}}" hx-swap-oob="outerHTML">
-    {{template "column.html" .Column}}
-</div>
+{{template "column_oob.html" .Column}}
 {{end}}

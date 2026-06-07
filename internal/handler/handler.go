@@ -30,4 +30,6 @@ func (handler *Handler) Register(echoServer *echo.Echo) {
 	echoServer.PUT("/cards/:id/status", handler.ChangeCardStatus)
 	echoServer.DELETE("/cards/:id", handler.DeleteCard)
 	echoServer.PUT("/cards/:id/move", handler.MoveCard)
+	echoServer.GET("/archived/stories", handler.ShowArchivedStories)
+	echoServer.POST("/columns/:id/archive-done", handler.ArchiveDoneInColumn)
 }

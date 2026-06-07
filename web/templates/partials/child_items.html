@@ -1,0 +1,37 @@
+{{define "child_items_list"}}
+{{if .Children}}
+<ul class="space-y-2 mb-4" data-child-list>
+    {{range .Children}}
+    <li{{if .IsDone}} data-child-done="true"{{end}}{{if .Archived}} data-child-archived="true"{{end}}>
+        <button
+            type="button"
+            hx-get="/cards/{{.ID}}/detail"
+            hx-target="#card-modal"
+            hx-swap="innerHTML"
+            class="w-full text-left rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50{{if .Archived}} opacity-75{{end}}"
+        >
+            <div class="flex items-center justify-between gap-2">
+                <span class="font-medium text-slate-800 truncate">{{.Title}}</span>
+                <div class="flex shrink-0 items-center gap-1">
+                    {{if .Archived}}
+                    <span class="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">Archived</span>
+                    {{end}}
+                    <span class="text-xs font-medium px-2 py-0.5 rounded {{.StatusBadgeClass}}">{{.ColumnName}}</span>
+                </div>
+            </div>
+        </button>
+    </li>
+    {{end}}
+</ul>
+<p class="hidden text-sm text-slate-400 mb-4" data-all-done-hidden>
+    {{if eq .CardType "project"}}All stories are done.{{else}}All tasks are done.{{end}}
+</p>
+<p class="hidden text-sm text-slate-400 mb-4" data-all-archived-hidden>
+    {{if eq .CardType "project"}}All stories are archived.{{else}}All tasks are archived.{{end}}
+</p>
+{{else}}
+<p class="text-sm text-slate-400 mb-4" data-child-empty>
+    {{if eq .CardType "project"}}No stories yet.{{else}}No tasks yet.{{end}}
+</p>
+{{end}}
+{{end}}

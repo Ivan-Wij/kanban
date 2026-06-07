@@ -1,10 +1,34 @@
-{{define "column.html"}}
-<div id="column-{{.ID}}" class="flex-shrink-0 w-80 {{.StatusBackgroundClass}} rounded-lg p-4" data-column-id="{{.ID}}">
-    <h2 class="font-semibold text-slate-700 mb-4">{{.Name}}</h2>
+{{define "column_content"}}
+    <div class="mb-4 flex items-center justify-between gap-2">
+        <h2 class="font-semibold text-slate-700">{{.Name}}</h2>
+        {{if eq .Name "Done"}}
+        <button
+            type="button"
+            hx-post="/columns/{{.ID}}/archive-done"
+            hx-target="body"
+            hx-swap="none"
+            hx-confirm="Archive all done items? They will be removed from the board."
+            class="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800"
+        >
+            Archive all
+        </button>
+        {{end}}
+    </div>
     <ul class="min-h-[200px] space-y-2" data-sortable-column data-column-id="{{.ID}}">
         {{range .Cards}}
             {{template "card.html" .}}
         {{end}}
     </ul>
+{{end}}
+
+{{define "column.html"}}
+<div id="column-{{.ID}}" class="flex-shrink-0 w-80 {{.StatusBackgroundClass}} rounded-lg p-4" data-column-id="{{.ID}}">
+    {{template "column_content" .}}
+</div>
+{{end}}
+
+{{define "column_oob.html"}}
+<div id="column-{{.ID}}" hx-swap-oob="true" class="flex-shrink-0 w-80 {{.StatusBackgroundClass}} rounded-lg p-4" data-column-id="{{.ID}}">
+    {{template "column_content" .}}
 </div>
 {{end}}

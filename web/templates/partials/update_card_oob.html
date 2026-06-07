@@ -2,7 +2,5 @@
 <div id="card-modal" hx-swap-oob="innerHTML">
     {{template "card_detail.html" .ModalDetail}}
 </div>
-<div id="column-{{.Column.ID}}" hx-swap-oob="outerHTML">
-    {{template "column.html" .Column}}
-</div>
+{{template "column_oob.html" .Column}}
 {{end}}

@@ -21,8 +21,10 @@ func NewPostgres(db *sqlx.DB) *Postgres {
 }
 
 const (
-	defaultBoardID = "00000000-0000-0000-0000-000000000001"
-	todoColumnID   = "00000000-0000-0000-0000-000000000011"
+	defaultBoardID   = "00000000-0000-0000-0000-000000000001"
+	todoColumnID     = "00000000-0000-0000-0000-000000000011"
+	doneColumnID     = "00000000-0000-0000-0000-000000000013"
+	archivedPageSize = 20
 )
 
 func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context) (domain.Board, error) {
@@ -45,10 +47,10 @@ func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context) (domain.B
 
 	var cards []domain.Card
 	if err := repo.db.SelectContext(ctx, &cards, `
-		SELECT c.id, c.column_id, c.card_type, c.parent_card_id, c.title, c.description, c.position, c.created_at
+		SELECT c.id, c.column_id, c.card_type, c.parent_card_id, c.title, c.description, c.position, c.created_at, c.archived
 		FROM cards c
 		INNER JOIN columns col ON col.id = c.column_id
-		WHERE col.board_id = $1
+		WHERE col.board_id = $1 AND c.archived = false
 		ORDER BY c.position ASC
 	`, defaultBoardID); err != nil {
 		return domain.Board{}, fmt.Errorf("get cards: %w", err)
@@ -63,6 +65,9 @@ func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context) (domain.B
 			cards[index].ParentTitle = parentTitles[cards[index].ParentCardID]
 		}
 	}
+
+	cardIndex := domain.BuildCardIndex(cards)
+	domain.EnrichProjectCardIDs(cards, cardIndex)
 
 	cardsByColumn := make(map[string][]domain.Card)
 	var projects []domain.Card
@@ -112,9 +117,9 @@ func (repo *Postgres) GetColumnWithCards(ctx context.Context, columnID string) (
 
 	var cards []domain.Card
 	if err := repo.db.SelectContext(ctx, &cards, `
-		SELECT id, column_id, card_type, parent_card_id, title, description, position, created_at
+		SELECT id, column_id, card_type, parent_card_id, title, description, position, created_at, archived
 		FROM cards
-		WHERE column_id = $1
+		WHERE column_id = $1 AND archived = false
 		ORDER BY position ASC
 	`, columnID); err != nil {
 		return domain.Column{}, fmt.Errorf("get cards: %w", err)
@@ -128,8 +133,28 @@ func (repo *Postgres) GetColumnWithCards(ctx context.Context, columnID string) (
 			_ = repo.db.GetContext(ctx, &cards[index].ParentTitle, `SELECT title FROM cards WHERE id = $1`, cards[index].ParentCardID)
 		}
 	}
+
+	cardIndex, err := repo.getCardHierarchyIndex(ctx)
+	if err != nil {
+		return domain.Column{}, err
+	}
+	domain.EnrichProjectCardIDs(cards, cardIndex)
+
 	column.Cards = domain.PrepareColumnCards(cards)
 	return column, nil
+}
+
+func (repo *Postgres) getCardHierarchyIndex(ctx context.Context) (map[string]domain.Card, error) {
+	var cards []domain.Card
+	if err := repo.db.SelectContext(ctx, &cards, `
+		SELECT c.id, c.card_type, c.parent_card_id
+		FROM cards c
+		INNER JOIN columns col ON col.id = c.column_id
+		WHERE col.board_id = $1
+	`, defaultBoardID); err != nil {
+		return nil, fmt.Errorf("get card hierarchy: %w", err)
+	}
+	return domain.BuildCardIndex(cards), nil
 }
 
 func (repo *Postgres) CreateCard(ctx context.Context, cardType domain.CardType, parentCardID, title, description string) (domain.Card, error) {
@@ -251,7 +276,7 @@ func (repo *Postgres) GetCardDetail(ctx context.Context, cardID string) (domain.
 
 	var children []domain.Card
 	if err := repo.db.SelectContext(ctx, &children, `
-		SELECT c.id, c.column_id, c.card_type, c.parent_card_id, c.title, c.description, c.position, c.created_at, col.name AS column_name
+		SELECT c.id, c.column_id, c.card_type, c.parent_card_id, c.title, c.description, c.position, c.created_at, c.archived, col.name AS column_name
 		FROM cards c
 		INNER JOIN columns col ON col.id = c.column_id
 		WHERE c.parent_card_id = $1
@@ -275,7 +300,7 @@ func (repo *Postgres) GetCardDetail(ctx context.Context, cardID string) (domain.
 func (repo *Postgres) GetCard(ctx context.Context, cardID string) (domain.Card, error) {
 	var card domain.Card
 	if err := repo.db.GetContext(ctx, &card, `
-		SELECT id, column_id, card_type, parent_card_id, title, description, position, created_at
+		SELECT id, column_id, card_type, parent_card_id, title, description, position, created_at, archived
 		FROM cards WHERE id = $1
 	`, cardID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -455,4 +480,108 @@ func (repo *Postgres) MoveCard(ctx context.Context, cardID, toColumnID string, p
 		return fmt.Errorf("commit move: %w", err)
 	}
 	return nil
+}
+
+func (repo *Postgres) ArchiveDoneInColumn(ctx context.Context, columnID string) error {
+	var cardIDs []string
+	if err := repo.db.SelectContext(ctx, &cardIDs, `
+		SELECT id FROM cards WHERE column_id = $1 AND archived = false
+	`, columnID); err != nil {
+		return fmt.Errorf("get done cards: %w", err)
+	}
+	return repo.archiveCardsWithDescendants(ctx, cardIDs)
+}
+
+func (repo *Postgres) archiveCardsWithDescendants(ctx context.Context, rootCardIDs []string) error {
+	if len(rootCardIDs) == 0 {
+		return nil
+	}
+
+	archiveIDs := make(map[string]bool)
+	for _, cardID := range rootCardIDs {
+		archiveIDs[cardID] = true
+		descendantIDs, err := repo.getDescendantCardIDs(ctx, cardID)
+		if err != nil {
+			return err
+		}
+		for _, descendantID := range descendantIDs {
+			archiveIDs[descendantID] = true
+		}
+	}
+
+	ids := make([]string, 0, len(archiveIDs))
+	for cardID := range archiveIDs {
+		ids = append(ids, cardID)
+	}
+
+	updateQuery, updateArgs, err := sqlx.In(`UPDATE cards SET archived = true WHERE id IN (?)`, ids)
+	if err != nil {
+		return fmt.Errorf("build archive query: %w", err)
+	}
+	updateQuery = repo.db.Rebind(updateQuery)
+
+	if _, err := repo.db.ExecContext(ctx, updateQuery, updateArgs...); err != nil {
+		return fmt.Errorf("archive cards: %w", err)
+	}
+	return nil
+}
+
+func (repo *Postgres) ListArchivedStories(ctx context.Context, query string, page int) (domain.ArchivedStoriesPage, error) {
+	if page < 1 {
+		page = 1
+	}
+
+	searchPattern := "%" + query + "%"
+	var totalCount int
+	countQuery := `
+		SELECT COUNT(*)
+		FROM cards c
+		INNER JOIN columns col ON col.id = c.column_id
+		WHERE col.board_id = $1
+			AND c.card_type = 'story'
+			AND c.archived = true
+			AND ($2 = '' OR c.title ILIKE $3 OR c.description ILIKE $3)
+	`
+	if err := repo.db.GetContext(ctx, &totalCount, countQuery, defaultBoardID, query, searchPattern); err != nil {
+		return domain.ArchivedStoriesPage{}, fmt.Errorf("count archived stories: %w", err)
+	}
+
+	totalPages := 1
+	if totalCount > 0 {
+		totalPages = (totalCount + archivedPageSize - 1) / archivedPageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	offset := (page - 1) * archivedPageSize
+
+	var stories []domain.Card
+	listQuery := `
+		SELECT c.id, c.column_id, c.card_type, c.parent_card_id, c.title, c.description, c.position, c.created_at, c.archived,
+			col.name AS column_name, parent.title AS parent_title
+		FROM cards c
+		INNER JOIN columns col ON col.id = c.column_id
+		LEFT JOIN cards parent ON parent.id::text = c.parent_card_id
+		WHERE col.board_id = $1
+			AND c.card_type = 'story'
+			AND c.archived = true
+			AND ($2 = '' OR c.title ILIKE $3 OR c.description ILIKE $3)
+		ORDER BY c.created_at DESC
+		LIMIT $4 OFFSET $5
+	`
+	if err := repo.db.SelectContext(ctx, &stories, listQuery, defaultBoardID, query, searchPattern, archivedPageSize, offset); err != nil {
+		return domain.ArchivedStoriesPage{}, fmt.Errorf("list archived stories: %w", err)
+	}
+	if stories == nil {
+		stories = []domain.Card{}
+	}
+
+	return domain.ArchivedStoriesPage{
+		Stories:    stories,
+		Query:      query,
+		Page:       page,
+		PageSize:   archivedPageSize,
+		TotalCount: totalCount,
+		TotalPages: totalPages,
+	}, nil
 }

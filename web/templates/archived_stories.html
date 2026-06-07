@@ -1,0 +1,115 @@
+{{define "archived_stories.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Archived Stories - Kanban</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.js" integrity="sha384-Q+Dky3iHVJOr6wUjQ4ulh6uQ76an/t+ak1+PjMVaxRjbZamFLAG+u9InkfjbsEQf" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        {{template "archived_stories_body" .}}
+    </div>
+    <div id="card-modal"></div>
+    <div id="create-modal"></div>
+    {{template "layout_scripts" .}}
+</body>
+</html>
+{{end}}
+
+{{define "archived_stories_body"}}
+<header class="mb-8">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <a href="/" class="text-sm text-blue-600 hover:underline">&larr; Back to board</a>
+            <h1 class="text-3xl font-bold text-slate-800 mt-2">Archived stories</h1>
+            <p class="text-slate-500 mt-1">{{.TotalCount}} archived {{if eq .TotalCount 1}}story{{else}}stories{{end}}</p>
+        </div>
+    </div>
+</header>
+
+<form method="GET" action="/archived/stories" class="mb-6">
+    <div class="flex gap-2">
+        <input
+            type="search"
+            name="q"
+            value="{{.Query}}"
+            placeholder="Search by title or description..."
+            class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+        <button
+            type="submit"
+            class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+            Search
+        </button>
+    </div>
+</form>
+
+{{if .Stories}}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <ul class="divide-y divide-slate-200">
+        {{range .Stories}}
+        <li class="px-4 py-4 hover:bg-slate-50">
+            <button
+                type="button"
+                hx-get="/cards/{{.ID}}/detail"
+                hx-target="#card-modal"
+                hx-swap="innerHTML"
+                class="w-full text-left"
+            >
+                <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                        <h2 class="font-medium text-slate-800 truncate">{{.Title}}</h2>
+                        {{if .Description}}
+                        <p class="text-sm text-slate-500 mt-1 line-clamp-2">{{.Description}}</p>
+                        {{end}}
+                        <p class="text-xs text-slate-400 mt-2">
+                            Project: {{if .ParentTitle}}{{.ParentTitle}}{{else}}—{{end}}
+                            · Archived {{.CreatedAt.Format "Jan 2, 2006"}}
+                        </p>
+                    </div>
+                    <span class="shrink-0 text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">Archived</span>
+                </div>
+            </button>
+        </li>
+        {{end}}
+    </ul>
+</div>
+
+{{if or .HasPreviousPage .HasNextPage}}
+<nav class="mt-6 flex items-center justify-between gap-4">
+    <div class="text-sm text-slate-500">
+        Page {{.Page}} of {{.TotalPages}}
+    </div>
+    <div class="flex gap-2">
+        {{if .HasPreviousPage}}
+        <a
+            href="/archived/stories?q={{.Query}}&page={{.PreviousPage}}"
+            class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+            Previous
+        </a>
+        {{end}}
+        {{if .HasNextPage}}
+        <a
+            href="/archived/stories?q={{.Query}}&page={{.NextPage}}"
+            class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+            Next
+        </a>
+        {{end}}
+    </div>
+</nav>
+{{end}}
+{{else}}
+<div class="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+    <p class="text-slate-500">
+        {{if .Query}}No archived stories match your search.{{else}}No archived stories yet.{{end}}
+    </p>
+</div>
+{{end}}
+{{end}}

@@ -5,6 +5,7 @@
     hx-get="/cards/{{.ParentCardID}}/detail"
     hx-target="#card-modal"
     hx-swap="innerHTML"
+    onclick="event.stopPropagation()"
     class="text-xs text-blue-600 hover:underline truncate"
 >
     under {{.ParentTitle}}

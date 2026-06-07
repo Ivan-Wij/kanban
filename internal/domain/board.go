@@ -38,10 +38,12 @@ type Card struct {
 	Description        string    `db:"description"`
 	Position           int       `db:"position"`
 	CreatedAt          time.Time `db:"created_at"`
-	ParentTitle        string    `db:"-"`
+	ParentTitle        string    `db:"parent_title"`
 	ColumnName         string    `db:"column_name"`
 	ParentInSameColumn bool      `db:"-"`
 	GroupDepth         int       `db:"-"`
+	ProjectCardID      string    `db:"-"`
+	Archived           bool      `db:"archived"`
 }
 
 type CardDetail struct {
@@ -75,6 +77,19 @@ type CreateCardForm struct {
 	Projects     []Card
 	Stories      []Card
 	TodoColumnID string
+}
+
+type ArchivedStoriesPage struct {
+	Stories    []Card
+	Query      string
+	Page       int
+	PageSize   int
+	TotalCount int
+	TotalPages int
+}
+
+type ArchiveDoneResult struct {
+	Column Column
 }
 
 func (cardType CardType) IsValid() bool {
@@ -137,6 +152,57 @@ func (card Card) StatusBadgeClass() string {
 	return statusBadgeClass(card.ColumnName)
 }
 
+func (card Card) IsDone() bool {
+	return card.ColumnName == "Done"
+}
+
+func (page ArchivedStoriesPage) HasPreviousPage() bool {
+	return page.Page > 1
+}
+
+func (page ArchivedStoriesPage) HasNextPage() bool {
+	return page.Page < page.TotalPages
+}
+
+func (page ArchivedStoriesPage) PreviousPage() int {
+	return page.Page - 1
+}
+
+func (page ArchivedStoriesPage) NextPage() int {
+	return page.Page + 1
+}
+
 func (detail CardDetail) StatusBadgeClass() string {
 	return statusBadgeClass(detail.ColumnName)
+}
+
+func BuildCardIndex(cards []Card) map[string]Card {
+	index := make(map[string]Card, len(cards))
+	for _, card := range cards {
+		index[card.ID] = card
+	}
+	return index
+}
+
+func ResolveProjectCardID(card Card, cardIndex map[string]Card) string {
+	switch card.CardType {
+	case CardTypeProject:
+		return card.ID
+	case CardTypeStory:
+		return card.ParentCardID
+	case CardTypeTask:
+		parentCard, found := cardIndex[card.ParentCardID]
+		if !found {
+			return ""
+		}
+		return parentCard.ParentCardID
+	default:
+		return ""
+	}
+}
+
+func EnrichProjectCardIDs(cards []Card, cardIndex map[string]Card) {
+	for index := range cards {
+		cards[index].ProjectCardID = ResolveProjectCardID(cards[index], cardIndex)
+	}
 }
