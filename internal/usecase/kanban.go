@@ -23,6 +23,10 @@ func (uc *Kanban) CreateBoard(ctx context.Context, name string) (domain.Board, e
 	return uc.repo.CreateBoard(ctx, name)
 }
 
+func (uc *Kanban) UpdateBoard(ctx context.Context, boardID, name string) (domain.Board, error) {
+	return uc.repo.UpdateBoard(ctx, boardID, name)
+}
+
 func (uc *Kanban) GetBoard(ctx context.Context, boardID string) (domain.Board, error) {
 	return uc.repo.GetBoardWithColumnsAndCards(ctx, boardID)
 }

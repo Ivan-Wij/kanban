@@ -1,0 +1,59 @@
+{{define "create_board_modal.html"}}
+<div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    onclick="if (event.target === this) closeCreateModal()"
+>
+    <div
+        class="bg-white rounded-xl shadow-xl w-full max-w-lg"
+        onclick="event.stopPropagation()"
+    >
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+            <h2 class="text-lg font-semibold text-slate-800">Create board</h2>
+            <button
+                type="button"
+                onclick="closeCreateModal()"
+                class="text-slate-400 hover:text-slate-600 text-2xl leading-none"
+            >
+                &times;
+            </button>
+        </div>
+
+        <form
+            hx-post="/boards"
+            hx-target="body"
+            hx-swap="none"
+            class="px-6 py-4 space-y-4"
+        >
+            <input type="hidden" name="from_create_modal" value="true">
+
+            <div>
+                <label for="create-board-name" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Name</label>
+                <input
+                    type="text"
+                    name="name"
+                    id="create-board-name"
+                    placeholder="Board name"
+                    required
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button
+                    type="submit"
+                    class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                    Create
+                </button>
+                <button
+                    type="button"
+                    onclick="closeCreateModal()"
+                    class="rounded bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                >
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}

@@ -21,8 +21,10 @@ func (handler *Handler) Register(echoServer *echo.Echo) {
 	echoServer.Use(middleware.Recover())
 
 	echoServer.GET("/", handler.ShowBoardList)
+	echoServer.GET("/boards/new", handler.ShowCreateBoardModal)
 	echoServer.POST("/boards", handler.CreateBoard)
 	echoServer.GET("/boards/:boardID", handler.ShowBoard)
+	echoServer.PUT("/boards/:boardID", handler.UpdateBoard)
 	echoServer.GET("/boards/:boardID/archived/stories", handler.ShowArchivedStories)
 	echoServer.GET("/boards/:boardID/cards/new", handler.ShowCreateCardModal)
 	echoServer.POST("/boards/:boardID/cards", handler.CreateCard)

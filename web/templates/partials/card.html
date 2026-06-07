@@ -2,6 +2,8 @@
 <li
     id="card-{{.ID}}"
     data-card-id="{{.ID}}"
+    data-card-title="{{.Title}}"
+    data-card-description="{{.Description}}"
     {{if .ProjectCardID}}data-project-id="{{.ProjectCardID}}"{{end}}
     hx-get="/cards/{{.ID}}/detail"
     hx-target="#card-modal"

@@ -66,6 +66,30 @@ func (repo *Postgres) CreateBoard(ctx context.Context, name string) (domain.Boar
 	return repo.GetBoardWithColumnsAndCards(ctx, boardID)
 }
 
+func (repo *Postgres) UpdateBoard(ctx context.Context, boardID, name string) (domain.Board, error) {
+	result, err := repo.db.ExecContext(ctx, `
+		UPDATE boards SET name = $1 WHERE id = $2
+	`, name, boardID)
+	if err != nil {
+		return domain.Board{}, fmt.Errorf("update board: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return domain.Board{}, fmt.Errorf("update board rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return domain.Board{}, fmt.Errorf("board not found")
+	}
+
+	var board domain.Board
+	if err := repo.db.GetContext(ctx, &board, `
+		SELECT id, name, created_at FROM boards WHERE id = $1
+	`, boardID); err != nil {
+		return domain.Board{}, fmt.Errorf("get updated board: %w", err)
+	}
+	return board, nil
+}
+
 func (repo *Postgres) getTodoColumnID(ctx context.Context, boardID string) (string, error) {
 	var columnID string
 	if err := repo.db.GetContext(ctx, &columnID, `

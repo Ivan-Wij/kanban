@@ -268,10 +268,58 @@
             });
         }
 
+        function boardSearchStorageKey() {
+            return 'kanban-board-search-' + getBoardScopeID();
+        }
+
+        function getBoardSearchQuery() {
+            var searchRoot = document.querySelector('[data-board-search]');
+            if (searchRoot) {
+                var input = searchRoot.querySelector('[data-board-search-input]');
+                if (input) {
+                    return input.value;
+                }
+            }
+            return localStorage.getItem(boardSearchStorageKey()) || '';
+        }
+
+        function setBoardSearchQuery(query) {
+            localStorage.setItem(boardSearchStorageKey(), query);
+        }
+
+        function cardMatchesSearch(card, searchQuery) {
+            if (searchQuery === '') {
+                return true;
+            }
+            var title = (card.getAttribute('data-card-title') || '').toLowerCase();
+            var description = (card.getAttribute('data-card-description') || '').toLowerCase();
+            return title.indexOf(searchQuery) !== -1 || description.indexOf(searchQuery) !== -1;
+        }
+
+        function applyCardFilters() {
+            var selected = getSelectedProjectIds();
+            var hasProjectFilter = selected.length > 0;
+            var searchQuery = getBoardSearchQuery().trim().toLowerCase();
+            var hasSearch = searchQuery !== '';
+
+            document.querySelectorAll('[data-card-id]').forEach(function (card) {
+                var visible = true;
+                if (hasProjectFilter) {
+                    var projectId = card.getAttribute('data-project-id');
+                    visible = projectId && selected.indexOf(projectId) !== -1;
+                }
+                if (visible && hasSearch) {
+                    visible = cardMatchesSearch(card, searchQuery);
+                }
+                card.classList.toggle('hidden', !visible);
+            });
+        }
+
         function applyProjectFilter() {
             var selected = getSelectedProjectIds();
             var filterRoot = document.querySelector('[data-project-filter]');
             if (!filterRoot) {
+                applyCardFilters();
                 return;
             }
 
@@ -325,15 +373,67 @@
                 });
             }
 
-            document.querySelectorAll('[data-card-id]').forEach(function (card) {
-                if (!hasFilter) {
-                    card.classList.remove('hidden');
-                    return;
+            applyCardFilters();
+        }
+
+        function applyBoardSearch() {
+            var searchRoot = document.querySelector('[data-board-search]');
+            if (!searchRoot) {
+                return;
+            }
+
+            var searchInput = searchRoot.querySelector('[data-board-search-input]');
+            var clearButton = searchRoot.querySelector('[data-board-search-clear]');
+            var query = searchInput ? searchInput.value : '';
+            var hasSearch = query.trim() !== '';
+
+            if (clearButton) {
+                clearButton.classList.toggle('hidden', !hasSearch);
+            }
+
+            setBoardSearchQuery(query);
+            applyCardFilters();
+        }
+
+        function clearBoardSearch() {
+            var searchRoot = document.querySelector('[data-board-search]');
+            if (!searchRoot) {
+                return;
+            }
+
+            var searchInput = searchRoot.querySelector('[data-board-search-input]');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            setBoardSearchQuery('');
+            applyBoardSearch();
+        }
+
+        function initBoardSearch() {
+            var searchRoot = document.querySelector('[data-board-search]');
+            if (!searchRoot) {
+                return;
+            }
+
+            if (searchRoot.dataset.boardSearchInitialized !== 'true') {
+                searchRoot.dataset.boardSearchInitialized = 'true';
+
+                var searchInput = searchRoot.querySelector('[data-board-search-input]');
+                var clearButton = searchRoot.querySelector('[data-board-search-clear]');
+
+                if (searchInput) {
+                    searchInput.addEventListener('input', applyBoardSearch);
                 }
-                var projectId = card.getAttribute('data-project-id');
-                var visible = projectId && selected.indexOf(projectId) !== -1;
-                card.classList.toggle('hidden', !visible);
-            });
+                if (clearButton) {
+                    clearButton.addEventListener('click', clearBoardSearch);
+                }
+            }
+
+            var searchInput = searchRoot.querySelector('[data-board-search-input]');
+            if (searchInput && searchInput.value === '') {
+                searchInput.value = localStorage.getItem(boardSearchStorageKey()) || '';
+            }
+            applyBoardSearch();
         }
 
         function clearProjectFilter() {
@@ -400,6 +500,107 @@
             applyProjectFilter();
         }
 
+        function getBoardNameFromServer(nameInput) {
+            return nameInput.getAttribute('data-saved-name') || '';
+        }
+
+        function resetBoardNameInput(nameInput) {
+            var savedName = getBoardNameFromServer(nameInput);
+            nameInput.value = savedName;
+            nameInput.defaultValue = savedName;
+            return savedName;
+        }
+
+        function initBoardNameForm() {
+            document.querySelectorAll('[data-board-name-form]').forEach(function (form) {
+                if (form.dataset.unsavedTrackerInitialized === 'true') {
+                    return;
+                }
+                form.dataset.unsavedTrackerInitialized = 'true';
+
+                var nameInput = form.querySelector('[data-board-name-input]');
+                var actions = form.querySelector('[data-board-name-actions]');
+                var saveButton = form.querySelector('[data-board-name-save]');
+                var unsavedLabel = form.querySelector('[data-unsaved-label]');
+                if (!nameInput || !actions) {
+                    return;
+                }
+
+                var savedName = resetBoardNameInput(nameInput);
+
+                function showActions() {
+                    actions.classList.remove('hidden');
+                }
+
+                function hideActions() {
+                    actions.classList.add('hidden');
+                }
+
+                function updateUnsavedState() {
+                    var hasUnsaved = nameInput.value !== savedName;
+                    var isFocused = document.activeElement === nameInput;
+                    var showHighlight = hasUnsaved && !isFocused;
+
+                    nameInput.classList.toggle('border-amber-300', showHighlight);
+                    nameInput.classList.toggle('bg-amber-50', showHighlight);
+                    nameInput.classList.toggle('ring-2', showHighlight);
+                    nameInput.classList.toggle('ring-amber-200', showHighlight);
+                    nameInput.classList.toggle('px-2', showHighlight);
+
+                    if (unsavedLabel) {
+                        unsavedLabel.classList.toggle('hidden', !hasUnsaved);
+                    }
+                }
+
+                nameInput.addEventListener('focus', function () {
+                    showActions();
+                    updateUnsavedState();
+                });
+
+                nameInput.addEventListener('blur', function () {
+                    window.setTimeout(function () {
+                        if (form.contains(document.activeElement)) {
+                            return;
+                        }
+                        hideActions();
+                        updateUnsavedState();
+                    }, 0);
+                });
+
+                if (saveButton) {
+                    saveButton.addEventListener('mousedown', function (event) {
+                        event.preventDefault();
+                    });
+                }
+
+                nameInput.addEventListener('input', updateUnsavedState);
+
+                form.addEventListener('htmx:afterRequest', function (event) {
+                    if (!event.detail.successful) {
+                        return;
+                    }
+                    savedName = nameInput.value;
+                    nameInput.setAttribute('data-saved-name', savedName);
+                    nameInput.defaultValue = savedName;
+                    document.title = nameInput.value + ' - Kanban';
+                    updateUnsavedState();
+                    hideActions();
+                });
+
+                updateUnsavedState();
+            });
+        }
+
+        window.addEventListener('pageshow', function () {
+            document.querySelectorAll('[data-board-name-input]').forEach(function (nameInput) {
+                var savedName = resetBoardNameInput(nameInput);
+                nameInput.classList.remove('border-amber-300', 'bg-amber-50', 'ring-2', 'ring-amber-200', 'px-2');
+                if (document.querySelector('[data-board-name-form]')) {
+                    document.title = savedName + ' - Kanban';
+                }
+            });
+        });
+
         function initCardEditForms() {
             document.querySelectorAll('[data-card-edit-form]').forEach(function (form) {
                 if (form.dataset.unsavedTrackerInitialized === 'true') {
@@ -437,24 +638,62 @@
             });
         }
 
+        function applyBoardsListSearch() {
+            var searchInput = document.querySelector('[data-boards-search-input]');
+            if (!searchInput) {
+                return;
+            }
+
+            var query = searchInput.value.trim().toLowerCase();
+            var visibleCount = 0;
+            document.querySelectorAll('[data-boards-list] [data-board-name]').forEach(function (boardLink) {
+                var name = (boardLink.getAttribute('data-board-name') || '').toLowerCase();
+                var visible = query === '' || name.indexOf(query) !== -1;
+                boardLink.classList.toggle('hidden', !visible);
+                if (visible) {
+                    visibleCount += 1;
+                }
+            });
+
+            var emptyMessage = document.querySelector('[data-boards-search-empty]');
+            if (emptyMessage) {
+                emptyMessage.classList.toggle('hidden', visibleCount > 0 || query === '');
+            }
+        }
+
+        function initBoardsListSearch() {
+            var searchInput = document.querySelector('[data-boards-search-input]');
+            if (!searchInput || searchInput.dataset.boardsSearchInitialized === 'true') {
+                return;
+            }
+            searchInput.dataset.boardsSearchInitialized = 'true';
+            searchInput.addEventListener('input', applyBoardsListSearch);
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             initSortable();
+            initBoardNameForm();
             initCardEditForms();
             initCreateCardForm();
             initChildFilters();
+            initBoardSearch();
             initProjectFilter();
+            initBoardsListSearch();
         });
         document.body.addEventListener('htmx:afterSwap', function () {
             initSortable();
+            initBoardNameForm();
             initCardEditForms();
             initCreateCardForm();
             initChildFilters();
+            initBoardSearch();
             applyProjectFilter();
         });
         document.body.addEventListener('htmx:oobAfterSwap', function () {
             initSortable();
             initCardEditForms();
             initChildFilters();
+            applyBoardSearch();
             applyProjectFilter();
         });
     </script>
