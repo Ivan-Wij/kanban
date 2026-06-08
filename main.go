@@ -15,6 +15,7 @@ import (
 	"kanban/internal/migrate"
 	"kanban/internal/repository"
 	"kanban/internal/usecase"
+	"kanban/migrations"
 )
 
 func main() {
@@ -29,7 +30,7 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
-	if err := migrate.Run(db, "migrations"); err != nil {
+	if err := migrate.Run(db, migrations.FS); err != nil {
 		log.Fatalf("run migrations: %v", err)
 	}
 

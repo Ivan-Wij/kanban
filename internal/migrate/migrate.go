@@ -2,20 +2,15 @@ package migrate
 
 import (
 	"fmt"
-	"os"
+	"io/fs"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
 
-func Run(db *sqlx.DB, migrationsDir string) error {
-	if migrationsDir == "" {
-		migrationsDir = "migrations"
-	}
-
+func Run(db *sqlx.DB, migrationsFS fs.FS) error {
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
@@ -25,9 +20,9 @@ func Run(db *sqlx.DB, migrationsDir string) error {
 		return fmt.Errorf("ensure schema_migrations: %w", err)
 	}
 
-	entries, err := os.ReadDir(migrationsDir)
+	entries, err := fs.ReadDir(migrationsFS, ".")
 	if err != nil {
-		return fmt.Errorf("read migrations dir: %w", err)
+		return fmt.Errorf("read migrations: %w", err)
 	}
 
 	var files []string
@@ -49,7 +44,7 @@ func Run(db *sqlx.DB, migrationsDir string) error {
 			continue
 		}
 
-		content, err := os.ReadFile(filepath.Join(migrationsDir, fileName))
+		content, err := fs.ReadFile(migrationsFS, fileName)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", fileName, err)
 		}
