@@ -10,9 +10,10 @@ import (
 )
 
 type cardForm struct {
-	Title       string `form:"title"`
-	Description string `form:"description"`
-	FromModal   string `form:"from_modal"`
+	Title        string `form:"title"`
+	Description  string `form:"description"`
+	ParentCardID string `form:"parent_card_id"`
+	FromModal    string `form:"from_modal"`
 }
 
 type createCardForm struct {
@@ -146,9 +147,9 @@ func (handler *Handler) UpdateCard(ctx *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "title is required")
 	}
 
-	_, err := handler.uc.UpdateCard(ctx.Request().Context(), cardID, form.Title, form.Description)
+	_, err := handler.uc.UpdateCard(ctx.Request().Context(), cardID, form.Title, form.Description, form.ParentCardID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	if form.FromModal == "true" {

@@ -56,6 +56,8 @@ type CardDetail struct {
 	ColumnName   string
 	Columns      []Column
 	Children     []Card
+	Projects     []Card
+	Stories      []Card
 	TodoColumnID string
 }
 

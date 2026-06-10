@@ -431,12 +431,29 @@ func (repo *Postgres) GetCardDetail(ctx context.Context, cardID string) (domain.
 		children = []domain.Card{}
 	}
 
+	var projects []domain.Card
+	var stories []domain.Card
+	switch card.CardType {
+	case domain.CardTypeStory:
+		projects, err = repo.listBoardCardsByType(ctx, boardID, domain.CardTypeProject)
+		if err != nil {
+			return domain.CardDetail{}, err
+		}
+	case domain.CardTypeTask:
+		stories, err = repo.listBoardCardsByType(ctx, boardID, domain.CardTypeStory)
+		if err != nil {
+			return domain.CardDetail{}, err
+		}
+	}
+
 	return domain.CardDetail{
 		Card:         card,
 		BoardID:      boardID,
 		ColumnName:   columnName,
 		Columns:      columns,
 		Children:     children,
+		Projects:     projects,
+		Stories:      stories,
 		TodoColumnID: todoColumnID,
 	}, nil
 }
@@ -459,10 +476,58 @@ func (repo *Postgres) GetCard(ctx context.Context, cardID string) (domain.Card, 
 	return card, nil
 }
 
-func (repo *Postgres) UpdateCard(ctx context.Context, cardID, title, description string) (domain.Card, error) {
-	_, err := repo.db.ExecContext(ctx, `
-		UPDATE cards SET title = $1, description = $2 WHERE id = $3
-	`, title, description, cardID)
+func (repo *Postgres) listBoardCardsByType(ctx context.Context, boardID string, cardType domain.CardType) ([]domain.Card, error) {
+	var cards []domain.Card
+	if err := repo.db.SelectContext(ctx, &cards, `
+		SELECT c.id, c.column_id, c.card_type, c.parent_card_id, c.title, c.description, c.position, c.created_at, c.archived
+		FROM cards c
+		INNER JOIN columns col ON col.id = c.column_id
+		WHERE col.board_id = $1 AND c.card_type = $2 AND c.archived = false
+		ORDER BY c.title ASC, c.created_at ASC
+	`, boardID, cardType); err != nil {
+		return nil, fmt.Errorf("list board cards by type: %w", err)
+	}
+	if cards == nil {
+		cards = []domain.Card{}
+	}
+	return cards, nil
+}
+
+func (repo *Postgres) UpdateCard(ctx context.Context, cardID, title, description, parentCardID string) (domain.Card, error) {
+	card, err := repo.GetCard(ctx, cardID)
+	if err != nil {
+		return domain.Card{}, err
+	}
+
+	boardID, err := repo.getCardBoardID(ctx, cardID)
+	if err != nil {
+		return domain.Card{}, err
+	}
+
+	effectiveParentID := parentCardID
+	if card.CardType == domain.CardTypeProject {
+		effectiveParentID = ""
+	} else {
+		if err := repo.validateCardHierarchy(ctx, boardID, card.CardType, effectiveParentID); err != nil {
+			return domain.Card{}, err
+		}
+		if effectiveParentID == cardID {
+			return domain.Card{}, fmt.Errorf("card cannot be its own parent")
+		}
+		descendantIDs, err := repo.getDescendantCardIDs(ctx, cardID)
+		if err != nil {
+			return domain.Card{}, err
+		}
+		for _, descendantID := range descendantIDs {
+			if descendantID == effectiveParentID {
+				return domain.Card{}, fmt.Errorf("cannot set a descendant as parent")
+			}
+		}
+	}
+
+	_, err = repo.db.ExecContext(ctx, `
+		UPDATE cards SET title = $1, description = $2, parent_card_id = $3 WHERE id = $4
+	`, title, description, effectiveParentID, cardID)
 	if err != nil {
 		return domain.Card{}, fmt.Errorf("update card: %w", err)
 	}

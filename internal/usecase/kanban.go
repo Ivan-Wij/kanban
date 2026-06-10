@@ -47,8 +47,8 @@ func (uc *Kanban) GetCardDetail(ctx context.Context, cardID string) (domain.Card
 	return uc.repo.GetCardDetail(ctx, cardID)
 }
 
-func (uc *Kanban) UpdateCard(ctx context.Context, cardID, title, description string) (domain.Card, error) {
-	return uc.repo.UpdateCard(ctx, cardID, title, description)
+func (uc *Kanban) UpdateCard(ctx context.Context, cardID, title, description, parentCardID string) (domain.Card, error) {
+	return uc.repo.UpdateCard(ctx, cardID, title, description, parentCardID)
 }
 
 func (uc *Kanban) DeleteCard(ctx context.Context, cardID string) (domain.DeleteCardResult, error) {

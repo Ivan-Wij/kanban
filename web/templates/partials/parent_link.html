@@ -14,15 +14,69 @@
 {{end}}
 
 {{define "parent_link_detail"}}
-{{if .ParentTitle}}
-<button
-    type="button"
-    hx-get="/cards/{{.ParentCardID}}/detail"
-    hx-target="#card-modal"
-    hx-swap="innerHTML"
-    class="text-sm text-blue-600 hover:underline mt-2"
->
-    Under {{.ParentTitle}}
-</button>
+{{if or (eq .CardType "story") (eq .CardType "task")}}
+<div class="relative mt-2 flex min-w-0 items-center gap-1" id="parent-dropdown-{{.ID}}">
+    {{if .ParentTitle}}
+    <button
+        type="button"
+        data-parent-link
+        hx-get="/cards/{{.ParentCardID}}/detail"
+        hx-target="#card-modal"
+        hx-swap="innerHTML"
+        class="truncate text-sm text-blue-600 hover:underline"
+    >
+        Under {{.ParentTitle}}
+    </button>
+    {{end}}
+    <button
+        type="button"
+        onclick="toggleParentDropdown('{{.ID}}')"
+        class="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        title="Change parent"
+        aria-label="Change parent"
+    >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+    </button>
+    <input type="hidden" name="parent_card_id" value="{{.ParentCardID}}" data-parent-input>
+    <div
+        id="parent-menu-{{.ID}}"
+        class="hidden absolute left-0 top-full z-10 mt-1 max-h-48 w-56 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+    >
+        {{if eq .CardType "story"}}
+        {{range .Projects}}
+        <button
+            type="button"
+            data-parent-id="{{.ID}}"
+            data-parent-title="{{.Title}}"
+            onclick="selectCardParentFromOption(this, '{{$.ID}}')"
+            class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
+        >
+            <span class="truncate">{{.Title}}</span>
+            {{if eq .ID $.ParentCardID}}
+            <span class="ml-2 shrink-0 text-xs text-slate-400">Current</span>
+            {{end}}
+        </button>
+        {{end}}
+        {{end}}
+        {{if eq .CardType "task"}}
+        {{range .Stories}}
+        <button
+            type="button"
+            data-parent-id="{{.ID}}"
+            data-parent-title="{{.Title}}"
+            onclick="selectCardParentFromOption(this, '{{$.ID}}')"
+            class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
+        >
+            <span class="truncate">{{.Title}}</span>
+            {{if eq .ID $.ParentCardID}}
+            <span class="ml-2 shrink-0 text-xs text-slate-400">Current</span>
+            {{end}}
+        </button>
+        {{end}}
+        {{end}}
+    </div>
+</div>
 {{end}}
 {{end}}

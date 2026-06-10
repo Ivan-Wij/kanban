@@ -7,7 +7,7 @@ run:
 	go run .
 
 build:
-	go build -o bin/$(BINARY) .
+	go build -o dist/$(BINARY) .
 
 # Cross-compile for one platform, e.g.:
 #   make build-cross GOOS=linux GOARCH=amd64

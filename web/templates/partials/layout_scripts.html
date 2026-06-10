@@ -46,6 +46,12 @@
             });
         }
 
+        function closeParentDropdowns() {
+            document.querySelectorAll('[id^="parent-menu-"]').forEach(function (menu) {
+                menu.classList.add('hidden');
+            });
+        }
+
         function toggleStatusDropdown(cardID) {
             var menu = document.getElementById('status-menu-' + cardID);
             if (!menu) {
@@ -53,14 +59,73 @@
             }
             var isHidden = menu.classList.contains('hidden');
             closeStatusDropdowns();
+            closeParentDropdowns();
             if (isHidden) {
                 menu.classList.remove('hidden');
             }
         }
 
+        function toggleParentDropdown(cardID) {
+            var menu = document.getElementById('parent-menu-' + cardID);
+            if (!menu) {
+                return;
+            }
+            var isHidden = menu.classList.contains('hidden');
+            closeParentDropdowns();
+            closeStatusDropdowns();
+            if (isHidden) {
+                menu.classList.remove('hidden');
+            }
+        }
+
+        function selectCardParentFromOption(button, cardID) {
+            var parentID = button.getAttribute('data-parent-id');
+            var parentTitle = button.getAttribute('data-parent-title');
+            if (!parentID || !parentTitle) {
+                return;
+            }
+
+            var container = document.getElementById('parent-dropdown-' + cardID);
+            if (!container) {
+                return;
+            }
+
+            var parentInput = container.querySelector('[data-parent-input]');
+            if (parentInput) {
+                parentInput.value = parentID;
+                parentInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            var parentLink = container.querySelector('[data-parent-link]');
+            if (parentLink) {
+                parentLink.textContent = 'Under ' + parentTitle;
+                parentLink.setAttribute('hx-get', '/cards/' + parentID + '/detail');
+                if (typeof htmx !== 'undefined') {
+                    htmx.process(parentLink);
+                }
+            }
+
+            container.querySelectorAll('[data-parent-id]').forEach(function (option) {
+                var currentLabel = option.querySelector('.text-slate-400');
+                if (option.getAttribute('data-parent-id') === parentID) {
+                    if (!currentLabel) {
+                        var label = document.createElement('span');
+                        label.className = 'ml-2 shrink-0 text-xs text-slate-400';
+                        label.textContent = 'Current';
+                        option.appendChild(label);
+                    }
+                } else if (currentLabel) {
+                    currentLabel.remove();
+                }
+            });
+
+            closeParentDropdowns();
+        }
+
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
                 closeStatusDropdowns();
+                closeParentDropdowns();
                 closeProjectFilterPanel();
                 closeChildFilterModal();
                 closeCreateModal();
@@ -71,6 +136,9 @@
         document.addEventListener('click', function (event) {
             if (!event.target.closest('[id^="status-dropdown-"]')) {
                 closeStatusDropdowns();
+            }
+            if (!event.target.closest('[id^="parent-dropdown-"]')) {
+                closeParentDropdowns();
             }
             if (!event.target.closest('[data-project-filter]')) {
                 closeProjectFilterPanel();
@@ -610,6 +678,7 @@
 
                 var titleInput = form.querySelector('[name="title"]');
                 var descriptionInput = form.querySelector('[name="description"]');
+                var parentSelect = form.querySelector('[name="parent_card_id"]');
                 var unsavedLabel = form.querySelector('[data-unsaved-label]');
                 if (!titleInput || !descriptionInput || !unsavedLabel) {
                     return;
@@ -617,15 +686,20 @@
 
                 var originalTitle = titleInput.value;
                 var originalDescription = descriptionInput.value;
+                var originalParentID = parentSelect ? parentSelect.value : '';
 
                 function updateUnsavedLabel() {
                     var hasChanges = titleInput.value !== originalTitle
-                        || descriptionInput.value !== originalDescription;
+                        || descriptionInput.value !== originalDescription
+                        || (parentSelect && parentSelect.value !== originalParentID);
                     unsavedLabel.classList.toggle('hidden', !hasChanges);
                 }
 
                 titleInput.addEventListener('input', updateUnsavedLabel);
                 descriptionInput.addEventListener('input', updateUnsavedLabel);
+                if (parentSelect) {
+                    parentSelect.addEventListener('change', updateUnsavedLabel);
+                }
 
                 form.addEventListener('htmx:afterRequest', function (event) {
                     if (!event.detail.successful) {
@@ -633,6 +707,9 @@
                     }
                     originalTitle = titleInput.value;
                     originalDescription = descriptionInput.value;
+                    if (parentSelect) {
+                        originalParentID = parentSelect.value;
+                    }
                     updateUnsavedLabel();
                 });
             });
