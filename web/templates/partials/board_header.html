@@ -36,6 +36,22 @@
         <p class="text-slate-500 mt-1">Drag cards between columns to update status.</p>
     </div>
     <div class="flex shrink-0 items-center gap-2">
+        {{if .IsFinished}}
+        <span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+            Finished
+        </span>
+        {{else}}
+        <button
+            type="button"
+            hx-put="/boards/{{.ID}}/finish"
+            hx-target="#board-header"
+            hx-swap="outerHTML"
+            hx-confirm="Mark this board as finished?"
+            class="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+        >
+            Mark finished
+        </button>
+        {{end}}
         <a
             href="/boards/{{.ID}}/archived/stories"
             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -50,6 +66,14 @@
             class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
             Create
+        </button>
+        <button
+            type="button"
+            hx-delete="/boards/{{.ID}}"
+            hx-confirm="Delete this board? It will no longer be accessible."
+            class="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+        >
+            Delete
         </button>
     </div>
 </header>

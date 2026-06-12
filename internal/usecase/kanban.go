@@ -19,12 +19,24 @@ func (uc *Kanban) ListBoards(ctx context.Context) ([]domain.Board, error) {
 	return uc.repo.ListBoards(ctx)
 }
 
+func (uc *Kanban) ListFinishedBoards(ctx context.Context, query, sortField, sortOrder string, page int) (domain.FinishedBoardsPage, error) {
+	return uc.repo.ListFinishedBoards(ctx, query, sortField, sortOrder, page)
+}
+
 func (uc *Kanban) CreateBoard(ctx context.Context, name string) (domain.Board, error) {
 	return uc.repo.CreateBoard(ctx, name)
 }
 
 func (uc *Kanban) UpdateBoard(ctx context.Context, boardID, name string) (domain.Board, error) {
 	return uc.repo.UpdateBoard(ctx, boardID, name)
+}
+
+func (uc *Kanban) DeleteBoard(ctx context.Context, boardID string) error {
+	return uc.repo.DeleteBoard(ctx, boardID)
+}
+
+func (uc *Kanban) FinishBoard(ctx context.Context, boardID string) (domain.Board, error) {
+	return uc.repo.FinishBoard(ctx, boardID)
 }
 
 func (uc *Kanban) GetBoard(ctx context.Context, boardID string) (domain.Board, error) {

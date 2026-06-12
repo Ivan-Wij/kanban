@@ -680,6 +680,9 @@
                 var descriptionInput = form.querySelector('[name="description"]');
                 var parentSelect = form.querySelector('[name="parent_card_id"]');
                 var unsavedLabel = form.querySelector('[data-unsaved-label]');
+                if (!unsavedLabel && form.id) {
+                    unsavedLabel = document.querySelector('[data-unsaved-label][data-form-target="' + form.id + '"]');
+                }
                 if (!titleInput || !descriptionInput || !unsavedLabel) {
                     return;
                 }
@@ -715,6 +718,65 @@
             });
         }
 
+        var boardsSortStorageKey = 'kanban-boards-sort';
+
+        function getBoardsSortPreference() {
+            var stored = localStorage.getItem(boardsSortStorageKey);
+            if (!stored) {
+                return { field: 'created', order: 'desc' };
+            }
+            try {
+                var preference = JSON.parse(stored);
+                var field = preference.field === 'name' ? 'name' : 'created';
+                var order = preference.order === 'asc' ? 'asc' : 'desc';
+                return { field: field, order: order };
+            } catch (error) {
+                return { field: 'created', order: 'desc' };
+            }
+        }
+
+        function setBoardsSortPreference(field, order) {
+            localStorage.setItem(boardsSortStorageKey, JSON.stringify({
+                field: field,
+                order: order
+            }));
+        }
+
+        function compareBoardLinks(leftLink, rightLink, field, order) {
+            var direction = order === 'asc' ? 1 : -1;
+            if (field === 'name') {
+                var leftName = (leftLink.getAttribute('data-board-name') || '').toLowerCase();
+                var rightName = (rightLink.getAttribute('data-board-name') || '').toLowerCase();
+                return leftName.localeCompare(rightName) * direction;
+            }
+
+            var leftCreatedAt = Number(leftLink.getAttribute('data-board-created-at') || '0');
+            var rightCreatedAt = Number(rightLink.getAttribute('data-board-created-at') || '0');
+            if (leftCreatedAt === rightCreatedAt) {
+                var leftName = (leftLink.getAttribute('data-board-name') || '').toLowerCase();
+                var rightName = (rightLink.getAttribute('data-board-name') || '').toLowerCase();
+                return leftName.localeCompare(rightName) * direction;
+            }
+            return (leftCreatedAt - rightCreatedAt) * direction;
+        }
+
+        function applyBoardsListSortWithPreference(field, order) {
+            var boardsList = document.querySelector('[data-boards-list]');
+            if (!boardsList) {
+                return;
+            }
+
+            var boardLinks = Array.prototype.slice.call(
+                boardsList.querySelectorAll('[data-board-name]')
+            );
+            boardLinks.sort(function (leftLink, rightLink) {
+                return compareBoardLinks(leftLink, rightLink, field, order);
+            });
+            boardLinks.forEach(function (boardLink) {
+                boardsList.appendChild(boardLink);
+            });
+        }
+
         function applyBoardsListSearch() {
             var searchInput = document.querySelector('[data-boards-search-input]');
             if (!searchInput) {
@@ -738,6 +800,52 @@
             }
         }
 
+        function applyBoardsListFilters() {
+            var preference = getBoardsSortPreference();
+            applyBoardsListSortWithPreference(preference.field, preference.order);
+            applyBoardsListSearch();
+        }
+
+        function closeBoardsSortPopups() {
+            document.querySelectorAll('[data-boards-sort-popup]').forEach(function (popup) {
+                popup.classList.add('hidden');
+            });
+        }
+
+        function updateBoardsSortPopupState(toolbar, field, order) {
+            toolbar.querySelectorAll('[data-boards-sort-order]').forEach(function (button) {
+                var isActive = button.getAttribute('data-boards-sort-order') === order;
+                button.classList.toggle('bg-slate-200', isActive);
+                button.classList.toggle('text-slate-900', isActive);
+            });
+            toolbar.querySelectorAll('[data-boards-sort-field]').forEach(function (button) {
+                var isActive = button.getAttribute('data-boards-sort-field') === field;
+                button.classList.toggle('bg-slate-100', isActive);
+                button.classList.toggle('font-medium', isActive);
+            });
+        }
+
+        function applyBoardsSortSelection(toolbar, mode, field, order) {
+            setBoardsSortPreference(field, order);
+            if (mode === 'client') {
+                applyBoardsListSortWithPreference(field, order);
+                applyBoardsListSearch();
+                return;
+            }
+
+            var fieldInput = toolbar.querySelector('[data-boards-sort-field-input]');
+            var orderInput = toolbar.querySelector('[data-boards-sort-order-input]');
+            if (fieldInput) {
+                fieldInput.value = field;
+            }
+            if (orderInput) {
+                orderInput.value = order;
+            }
+            if (toolbar.tagName === 'FORM') {
+                toolbar.submit();
+            }
+        }
+
         function initBoardsListSearch() {
             var searchInput = document.querySelector('[data-boards-search-input]');
             if (!searchInput || searchInput.dataset.boardsSearchInitialized === 'true') {
@@ -747,30 +855,183 @@
             searchInput.addEventListener('input', applyBoardsListSearch);
         }
 
+        function initBoardsToolbar() {
+            document.querySelectorAll('[data-boards-toolbar]').forEach(function (toolbar) {
+                if (toolbar.dataset.boardsToolbarInitialized === 'true') {
+                    return;
+                }
+                toolbar.dataset.boardsToolbarInitialized = 'true';
+
+                var mode = toolbar.getAttribute('data-boards-sort-mode') || 'client';
+                var preference = getBoardsSortPreference();
+                var field = preference.field;
+                var order = preference.order;
+
+                if (mode === 'server') {
+                    var fieldInput = toolbar.querySelector('[data-boards-sort-field-input]');
+                    var orderInput = toolbar.querySelector('[data-boards-sort-order-input]');
+                    if (fieldInput && fieldInput.value) {
+                        field = fieldInput.value;
+                    }
+                    if (orderInput && orderInput.value) {
+                        order = orderInput.value;
+                    }
+                }
+
+                updateBoardsSortPopupState(toolbar, field, order);
+
+                if (mode === 'client') {
+                    applyBoardsListSortWithPreference(field, order);
+                }
+
+                var toggle = toolbar.querySelector('[data-boards-sort-toggle]');
+                var popup = toolbar.querySelector('[data-boards-sort-popup]');
+                if (toggle && popup) {
+                    toggle.addEventListener('click', function (event) {
+                        event.stopPropagation();
+                        var isHidden = popup.classList.contains('hidden');
+                        closeBoardsSortPopups();
+                        if (isHidden) {
+                            popup.classList.remove('hidden');
+                        }
+                    });
+                    popup.addEventListener('click', function (event) {
+                        event.stopPropagation();
+                    });
+                }
+
+                toolbar.querySelectorAll('[data-boards-sort-order]').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        order = button.getAttribute('data-boards-sort-order');
+                        updateBoardsSortPopupState(toolbar, field, order);
+                        applyBoardsSortSelection(toolbar, mode, field, order);
+                    });
+                });
+
+                toolbar.querySelectorAll('[data-boards-sort-field]').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        field = button.getAttribute('data-boards-sort-field');
+                        updateBoardsSortPopupState(toolbar, field, order);
+                        applyBoardsSortSelection(toolbar, mode, field, order);
+                        closeBoardsSortPopups();
+                    });
+                });
+            });
+        }
+
+        if (!window.boardsSortOutsideClickInitialized) {
+            window.boardsSortOutsideClickInitialized = true;
+            document.addEventListener('click', closeBoardsSortPopups);
+        }
+
+        function renderDescriptionPreview(editor, text, callback) {
+            fetch('/markdown/render', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ text: text })
+            })
+                .then(function (response) {
+                    return response.text();
+                })
+                .then(function (html) {
+                    var view = editor.querySelector('[data-description-view]');
+                    if (view) {
+                        view.innerHTML = html;
+                    }
+                    if (callback) {
+                        callback();
+                    }
+                });
+        }
+
+        function openDescriptionEditor(editor) {
+            var view = editor.querySelector('[data-description-view]');
+            var input = editor.querySelector('[name="description"]');
+            if (!view || !input || editor.dataset.descriptionEditing === 'true') {
+                return;
+            }
+
+            editor.dataset.descriptionEditing = 'true';
+            view.classList.add('hidden');
+            input.classList.remove('hidden');
+            input.focus();
+        }
+
+        function closeDescriptionEditor(input) {
+            var editor = input.closest('[data-description-editor]');
+            if (!editor || editor.dataset.descriptionEditing !== 'true') {
+                return;
+            }
+
+            editor.dataset.descriptionEditing = 'false';
+            var view = editor.querySelector('[data-description-view]');
+            input.classList.add('hidden');
+            if (view) {
+                view.classList.remove('hidden');
+            }
+
+            renderDescriptionPreview(editor, input.value, function () {
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        }
+
+        function initCardDescriptionEditors() {
+            document.querySelectorAll('[data-description-editor]').forEach(function (editor) {
+                if (editor.dataset.descriptionEditorInitialized === 'true') {
+                    return;
+                }
+                editor.dataset.descriptionEditorInitialized = 'true';
+
+                var view = editor.querySelector('[data-description-view]');
+                var input = editor.querySelector('[name="description"]');
+                if (!view || !input) {
+                    return;
+                }
+
+                view.addEventListener('click', function () {
+                    openDescriptionEditor(editor);
+                });
+                view.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openDescriptionEditor(editor);
+                    }
+                });
+                input.addEventListener('blur', function () {
+                    closeDescriptionEditor(input);
+                });
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             initSortable();
             initBoardNameForm();
             initCardEditForms();
+            initCardDescriptionEditors();
             initCreateCardForm();
             initChildFilters();
             initBoardSearch();
             initProjectFilter();
             initBoardsListSearch();
+            initBoardsToolbar();
         });
         document.body.addEventListener('htmx:afterSwap', function () {
             initSortable();
             initBoardNameForm();
             initCardEditForms();
+            initCardDescriptionEditors();
             initCreateCardForm();
             initChildFilters();
             initBoardSearch();
+            initBoardsToolbar();
             applyProjectFilter();
         });
         document.body.addEventListener('htmx:oobAfterSwap', function () {
             initSortable();
             initCardEditForms();
+            initCardDescriptionEditors();
             initChildFilters();
-            applyBoardSearch();
+            initBoardSearch();
             applyProjectFilter();
         });
     </script>

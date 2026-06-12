@@ -14,6 +14,8 @@ type Board struct {
 	ID           string    `db:"id"`
 	Name         string    `db:"name"`
 	CreatedAt    time.Time `db:"created_at"`
+	Finished     bool      `db:"finished"`
+	Deleted      bool      `db:"deleted"`
 	Columns      []Column
 	TodoColumnID string `db:"-"`
 	Projects     []Card `db:"-"`
@@ -48,6 +50,17 @@ type Card struct {
 
 type BoardListPage struct {
 	Boards []Board
+}
+
+type FinishedBoardsPage struct {
+	Boards     []Board
+	Query      string
+	SortField  string
+	SortOrder  string
+	Page       int
+	PageSize   int
+	TotalCount int
+	TotalPages int
 }
 
 type CardDetail struct {
@@ -163,6 +176,30 @@ func (card Card) StatusBadgeClass() string {
 
 func (card Card) IsDone() bool {
 	return card.ColumnName == "Done"
+}
+
+func (board Board) IsFinished() bool {
+	return board.Finished
+}
+
+func (page FinishedBoardsPage) HasPreviousPage() bool {
+	return page.Page > 1
+}
+
+func (page FinishedBoardsPage) HasNextPage() bool {
+	return page.Page < page.TotalPages
+}
+
+func (page FinishedBoardsPage) PreviousPage() int {
+	return page.Page - 1
+}
+
+func (page FinishedBoardsPage) NextPage() int {
+	return page.Page + 1
+}
+
+func (page FinishedBoardsPage) SortQuery() string {
+	return "sort=" + page.SortField + "&order=" + page.SortOrder
 }
 
 func (page ArchivedStoriesPage) HasPreviousPage() bool {

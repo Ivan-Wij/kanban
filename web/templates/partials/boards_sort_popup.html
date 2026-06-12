@@ -1,0 +1,43 @@
+{{define "boards_sort_popup"}}
+<div
+    class="hidden absolute right-0 z-20 mt-2 w-52 rounded-lg border border-slate-200 bg-white shadow-lg"
+    data-boards-sort-popup
+>
+    <div class="flex gap-1 border-b border-slate-200 p-2">
+        <button
+            type="button"
+            data-boards-sort-order="asc"
+            class="flex-1 rounded-md px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+        >
+            Asc
+        </button>
+        <button
+            type="button"
+            data-boards-sort-order="desc"
+            class="flex-1 rounded-md px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+        >
+            Desc
+        </button>
+    </div>
+    <ul class="py-1">
+        <li>
+            <button
+                type="button"
+                data-boards-sort-field="created"
+                class="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+                Created
+            </button>
+        </li>
+        <li>
+            <button
+                type="button"
+                data-boards-sort-field="name"
+                class="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+                Name
+            </button>
+        </li>
+    </ul>
+</div>
+{{end}}

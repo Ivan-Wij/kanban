@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"kanban/internal/markdown"
 	"kanban/web/templates"
 )
 
@@ -15,7 +16,10 @@ type Renderer struct {
 }
 
 func NewRenderer() (*Renderer, error) {
-	parsed, err := template.ParseFS(templates.FS, "*.html", "partials/*.html")
+	funcMap := template.FuncMap{
+		"markdown": markdown.Render,
+	}
+	parsed, err := template.New("").Funcs(funcMap).ParseFS(templates.FS, "*.html", "partials/*.html")
 	if err != nil {
 		return nil, err
 	}

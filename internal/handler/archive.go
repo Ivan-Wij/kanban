@@ -17,7 +17,7 @@ func (handler *Handler) ShowArchivedStories(ctx *echo.Context) error {
 
 	result, err := handler.uc.ListArchivedStories(ctx.Request().Context(), boardID, query, page)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 	return handler.renderer.HTML(ctx, http.StatusOK, "archived_stories.html", result)
 }

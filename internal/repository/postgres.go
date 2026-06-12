@@ -24,10 +24,29 @@ const archivedPageSize = 20
 
 var defaultColumnNames = []string{"To Do", "In Progress", "Done"}
 
+func (repo *Postgres) ensureBoardAccessible(ctx context.Context, boardID string) error {
+	var deleted bool
+	if err := repo.db.GetContext(ctx, &deleted, `
+		SELECT deleted FROM boards WHERE id = $1
+	`, boardID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("board not found")
+		}
+		return fmt.Errorf("check board: %w", err)
+	}
+	if deleted {
+		return fmt.Errorf("board not found")
+	}
+	return nil
+}
+
 func (repo *Postgres) ListBoards(ctx context.Context) ([]domain.Board, error) {
 	var boards []domain.Board
 	if err := repo.db.SelectContext(ctx, &boards, `
-		SELECT id, name, created_at FROM boards ORDER BY created_at ASC
+		SELECT id, name, created_at, finished, deleted
+		FROM boards
+		WHERE deleted = false AND finished = false
+		ORDER BY created_at DESC
 	`); err != nil {
 		return nil, fmt.Errorf("list boards: %w", err)
 	}
@@ -67,8 +86,12 @@ func (repo *Postgres) CreateBoard(ctx context.Context, name string) (domain.Boar
 }
 
 func (repo *Postgres) UpdateBoard(ctx context.Context, boardID, name string) (domain.Board, error) {
+	if err := repo.ensureBoardAccessible(ctx, boardID); err != nil {
+		return domain.Board{}, err
+	}
+
 	result, err := repo.db.ExecContext(ctx, `
-		UPDATE boards SET name = $1 WHERE id = $2
+		UPDATE boards SET name = $1 WHERE id = $2 AND deleted = false
 	`, name, boardID)
 	if err != nil {
 		return domain.Board{}, fmt.Errorf("update board: %w", err)
@@ -83,9 +106,58 @@ func (repo *Postgres) UpdateBoard(ctx context.Context, boardID, name string) (do
 
 	var board domain.Board
 	if err := repo.db.GetContext(ctx, &board, `
-		SELECT id, name, created_at FROM boards WHERE id = $1
+		SELECT id, name, created_at, finished, deleted FROM boards WHERE id = $1
 	`, boardID); err != nil {
 		return domain.Board{}, fmt.Errorf("get updated board: %w", err)
+	}
+	return board, nil
+}
+
+func (repo *Postgres) DeleteBoard(ctx context.Context, boardID string) error {
+	if err := repo.ensureBoardAccessible(ctx, boardID); err != nil {
+		return err
+	}
+
+	result, err := repo.db.ExecContext(ctx, `
+		UPDATE boards SET deleted = true WHERE id = $1 AND deleted = false
+	`, boardID)
+	if err != nil {
+		return fmt.Errorf("delete board: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete board rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("board not found")
+	}
+	return nil
+}
+
+func (repo *Postgres) FinishBoard(ctx context.Context, boardID string) (domain.Board, error) {
+	if err := repo.ensureBoardAccessible(ctx, boardID); err != nil {
+		return domain.Board{}, err
+	}
+
+	result, err := repo.db.ExecContext(ctx, `
+		UPDATE boards SET finished = true WHERE id = $1 AND deleted = false
+	`, boardID)
+	if err != nil {
+		return domain.Board{}, fmt.Errorf("finish board: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return domain.Board{}, fmt.Errorf("finish board rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return domain.Board{}, fmt.Errorf("board not found")
+	}
+
+	var board domain.Board
+	if err := repo.db.GetContext(ctx, &board, `
+		SELECT id, name, created_at, finished, deleted FROM boards WHERE id = $1
+	`, boardID); err != nil {
+		return domain.Board{}, fmt.Errorf("get finished board: %w", err)
 	}
 	return board, nil
 }
@@ -109,7 +181,8 @@ func (repo *Postgres) getCardBoardID(ctx context.Context, cardID string) (string
 		SELECT col.board_id
 		FROM cards c
 		INNER JOIN columns col ON col.id = c.column_id
-		WHERE c.id = $1
+		INNER JOIN boards board ON board.id = col.board_id
+		WHERE c.id = $1 AND board.deleted = false
 	`, cardID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("card not found")
@@ -121,7 +194,12 @@ func (repo *Postgres) getCardBoardID(ctx context.Context, cardID string) (string
 
 func (repo *Postgres) getColumnBoardID(ctx context.Context, columnID string) (string, error) {
 	var boardID string
-	if err := repo.db.GetContext(ctx, &boardID, `SELECT board_id FROM columns WHERE id = $1`, columnID); err != nil {
+	if err := repo.db.GetContext(ctx, &boardID, `
+		SELECT col.board_id
+		FROM columns col
+		INNER JOIN boards board ON board.id = col.board_id
+		WHERE col.id = $1 AND board.deleted = false
+	`, columnID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("column not found")
 		}
@@ -133,7 +211,9 @@ func (repo *Postgres) getColumnBoardID(ctx context.Context, columnID string) (st
 func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context, boardID string) (domain.Board, error) {
 	var board domain.Board
 	if err := repo.db.GetContext(ctx, &board, `
-		SELECT id, name, created_at FROM boards WHERE id = $1
+		SELECT id, name, created_at, finished, deleted
+		FROM boards
+		WHERE id = $1 AND deleted = false
 	`, boardID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Board{}, fmt.Errorf("board not found")
@@ -218,6 +298,10 @@ func (repo *Postgres) GetBoardWithColumnsAndCards(ctx context.Context, boardID s
 }
 
 func (repo *Postgres) GetColumnWithCards(ctx context.Context, columnID string) (domain.Column, error) {
+	if _, err := repo.getColumnBoardID(ctx, columnID); err != nil {
+		return domain.Column{}, err
+	}
+
 	var column domain.Column
 	if err := repo.db.GetContext(ctx, &column, `
 		SELECT id, board_id, name, position, created_at
@@ -269,6 +353,9 @@ func (repo *Postgres) getCardHierarchyIndex(ctx context.Context, boardID string)
 }
 
 func (repo *Postgres) CreateCard(ctx context.Context, boardID string, cardType domain.CardType, parentCardID, title, description string) (domain.Card, error) {
+	if err := repo.ensureBoardAccessible(ctx, boardID); err != nil {
+		return domain.Card{}, err
+	}
 	if err := repo.validateCardHierarchy(ctx, boardID, cardType, parentCardID); err != nil {
 		return domain.Card{}, err
 	}
@@ -459,6 +546,10 @@ func (repo *Postgres) GetCardDetail(ctx context.Context, cardID string) (domain.
 }
 
 func (repo *Postgres) GetCard(ctx context.Context, cardID string) (domain.Card, error) {
+	if _, err := repo.getCardBoardID(ctx, cardID); err != nil {
+		return domain.Card{}, err
+	}
+
 	var card domain.Card
 	if err := repo.db.GetContext(ctx, &card, `
 		SELECT id, column_id, card_type, parent_card_id, title, description, position, created_at, archived
@@ -748,6 +839,9 @@ func (repo *Postgres) archiveCardsWithDescendants(ctx context.Context, rootCardI
 }
 
 func (repo *Postgres) ListArchivedStories(ctx context.Context, boardID, query string, page int) (domain.ArchivedStoriesPage, error) {
+	if err := repo.ensureBoardAccessible(ctx, boardID); err != nil {
+		return domain.ArchivedStoriesPage{}, err
+	}
 	if page < 1 {
 		page = 1
 	}
@@ -801,6 +895,81 @@ func (repo *Postgres) ListArchivedStories(ctx context.Context, boardID, query st
 		BoardID:    boardID,
 		Stories:    stories,
 		Query:      query,
+		Page:       page,
+		PageSize:   archivedPageSize,
+		TotalCount: totalCount,
+		TotalPages: totalPages,
+	}, nil
+}
+
+func boardOrderClause(sortField, sortOrder string) string {
+	order := "DESC"
+	if sortOrder == "asc" {
+		order = "ASC"
+	}
+	if sortField == "name" {
+		return "name " + order
+	}
+	return "created_at " + order
+}
+
+func (repo *Postgres) ListFinishedBoards(ctx context.Context, query, sortField, sortOrder string, page int) (domain.FinishedBoardsPage, error) {
+	if page < 1 {
+		page = 1
+	}
+	if sortField != "name" {
+		sortField = "created"
+	}
+	if sortOrder != "asc" {
+		sortOrder = "desc"
+	}
+
+	searchPattern := "%" + query + "%"
+	var totalCount int
+	countQuery := `
+		SELECT COUNT(*)
+		FROM boards
+		WHERE deleted = false
+			AND finished = true
+			AND ($1 = '' OR name ILIKE $2)
+	`
+	if err := repo.db.GetContext(ctx, &totalCount, countQuery, query, searchPattern); err != nil {
+		return domain.FinishedBoardsPage{}, fmt.Errorf("count finished boards: %w", err)
+	}
+
+	totalPages := 1
+	if totalCount > 0 {
+		totalPages = (totalCount + archivedPageSize - 1) / archivedPageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	offset := (page - 1) * archivedPageSize
+
+	orderClause := boardOrderClause(sortField, sortOrder)
+	listQuery := fmt.Sprintf(`
+		SELECT id, name, created_at, finished, deleted
+		FROM boards
+		WHERE deleted = false
+			AND finished = true
+			AND ($1 = '' OR name ILIKE $2)
+		ORDER BY %s
+		LIMIT $3 OFFSET $4
+	`, orderClause)
+
+	var boards []domain.Board
+	if err := repo.db.SelectContext(ctx, &boards, listQuery, query, searchPattern, archivedPageSize, offset); err != nil {
+		return domain.FinishedBoardsPage{}, fmt.Errorf("list finished boards: %w", err)
+	}
+	if boards == nil {
+		boards = []domain.Board{}
+	}
+
+	return domain.FinishedBoardsPage{
+		Boards:     boards,
+		Query:      query,
+		SortField:  sortField,
+		SortOrder:  sortOrder,
 		Page:       page,
 		PageSize:   archivedPageSize,
 		TotalCount: totalCount,
